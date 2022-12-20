@@ -444,7 +444,7 @@ void SlabMesh::DeleteEdge(unsigned eid)
 	if(!edges[eid].first)
 		return;
 
-	// Èç¹ûÊÇboundary_edge£¬Ôò½øĞĞÊôĞÔµÄ¸üĞÂ
+	// å¦‚æœæ˜¯boundary_edgeï¼Œåˆ™è¿›è¡Œå±æ€§çš„æ›´æ–°
 	if (edges[eid].second->fake_boundary_edge)
 	{
 		if(vertices[edges[eid].second->vertices_.first].first)
@@ -715,7 +715,7 @@ void SlabMesh::DistinguishVertexType()
 			//boundary_vertexes.insert(edges[i].second->vertices_.first);
 			//boundary_vertexes.insert(edges[i].second->vertices_.second);
 		}
-        else if (edges[i].first && edges[i].second->faces_.size() >= 3)//¹ØÁªµÄÃæ³¬¹ı3ÊÇ·ÇÁ÷ĞÎ±ß
+        else if (edges[i].first && edges[i].second->faces_.size() >= 3)//å…³è”çš„é¢è¶…è¿‡3æ˜¯éæµå½¢è¾¹
 		{
 			// non manifold edge
 			edges[i].second->non_manifold_edge = true;
@@ -927,7 +927,7 @@ void SlabMesh::InsertSavedPoint(unsigned vid)
 			return;
 }
 
-// ÅĞ¶ÏÊÇ·ñ»á´æÔÚÈı½ÇĞÎ·´×ªÇé¿ö
+// åˆ¤æ–­æ˜¯å¦ä¼šå­˜åœ¨ä¸‰è§’å½¢åè½¬æƒ…å†µ
 bool SlabMesh::Contractible(unsigned vid_src1, unsigned vid_src2, Vector3d v_tgt)
 {
 	if( !vertices[vid_src1].first || !vertices[vid_src2].first )
@@ -943,7 +943,7 @@ bool SlabMesh::Contractible(unsigned vid_src1, unsigned vid_src2, Vector3d v_tgt
 		if(faces[*si].first)
 		{
 			if ( faces[*si].second->vertices_.find(vid_src1) != faces[*si].second->vertices_.end() 
-				&& faces[*si].second->vertices_.find(vid_src2) != faces[*si].second->vertices_.end())//Í¬Ê±¹ØÁªÕâÁ½¸öµãµÄÈı½ÇÃæ¶¼»áÏûÊ§²»ÓÃ¼ì²éÁË
+				&& faces[*si].second->vertices_.find(vid_src2) != faces[*si].second->vertices_.end())//åŒæ—¶å…³è”è¿™ä¸¤ä¸ªç‚¹çš„ä¸‰è§’é¢éƒ½ä¼šæ¶ˆå¤±ä¸ç”¨æ£€æŸ¥äº†
 				continue;
 
 			Vector3d pp[3], pa[3];
@@ -961,7 +961,7 @@ bool SlabMesh::Contractible(unsigned vid_src1, unsigned vid_src2, Vector3d v_tgt
 			//if (angle > Wm4::Math<double>::PI * 2.0 / 3.0)
 			//	return false;
 
-			if(pnorm.Dot(anorm) < 0)//Ìæ»»ÊÕËõºóµÄµãÆäËû¹ØÁªÎ´È¡ÏûµÄÃæ·¨Ïò±ä¸ü·½Ïò£¬¼´Ãæ·¢Éú·´×ªËµÃ÷ÕâÌõ±ß²»ÄÜÊÕËõ
+			if(pnorm.Dot(anorm) < 0)//æ›¿æ¢æ”¶ç¼©åçš„ç‚¹å…¶ä»–å…³è”æœªå–æ¶ˆçš„é¢æ³•å‘å˜æ›´æ–¹å‘ï¼Œå³é¢å‘ç”Ÿåè½¬è¯´æ˜è¿™æ¡è¾¹ä¸èƒ½æ”¶ç¼©
 				return false;
 		}
 	}
@@ -1039,7 +1039,7 @@ bool SlabMesh::MinCostBoundaryEdgeCollapse(unsigned & eid)
 		switch(boundary_compute_scale)
 		{
 		case 1:			
-			// ¶ÔĞÂÌí¼ÓµÄ±ßÅĞ¶ÏÊôĞÔ
+			// å¯¹æ–°æ·»åŠ çš„è¾¹åˆ¤æ–­å±æ€§
 			for (unsigned i = former_edge_number; i < edges.size(); i++)
 			{
 				if (edges[i].second->faces_.size() <= 1)
@@ -1063,7 +1063,7 @@ bool SlabMesh::MinCostBoundaryEdgeCollapse(unsigned & eid)
 			//}
 			break;
 		case 2:
-			// ¶ÔĞÂÌí¼ÓµÄ±ßÅĞ¶ÏÊôĞÔ
+			// å¯¹æ–°æ·»åŠ çš„è¾¹åˆ¤æ–­å±æ€§
 			for (unsigned i = former_edge_number; i < edges.size(); i++)
 			{
 				if (edges[i].second->faces_.size() <= 1)
@@ -1187,14 +1187,14 @@ bool SlabMesh::MinCostEdgeCollapse(unsigned & eid){
 	Sphere sphere = edges[eid].second->sphere;
 	double hyperbolic_weight = vertices[v1].second->hyperbolic_weight + vertices[v2].second->hyperbolic_weight;
 
-	//// ¶ÔÓÚºÏ²¢»á·¢ÉúÍØÆË¸Ä±äµÄ±ß£¬²»ÔÊĞí½øĞĞºÏ²¢
+	//// å¯¹äºåˆå¹¶ä¼šå‘ç”Ÿæ‹“æ‰‘æ”¹å˜çš„è¾¹ï¼Œä¸å…è®¸è¿›è¡Œåˆå¹¶
 	if (!edges[eid].second->topo_contractable)
 		return false;
 
-	// Èç¹û·¢ÉúÁË·´×ªµÄ´¦Àí·½Ê½
+	// å¦‚æœå‘ç”Ÿäº†åè½¬çš„å¤„ç†æ–¹å¼
 	if (prevent_inversion == true)
 	{
-		// µ±·¢Éú·­×ªÊ±£¬Ñ¡È¡Ã»ÓĞÒıÆğ·­×ªµÄ·½Ê½½øĞĞºÏ²¢
+		// å½“å‘ç”Ÿç¿»è½¬æ—¶ï¼Œé€‰å–æ²¡æœ‰å¼•èµ·ç¿»è½¬çš„æ–¹å¼è¿›è¡Œåˆå¹¶
 		if (!Contractible(v1, v2, sphere.center))
 		{
 			Wm4::Vector4d lamdar;
@@ -1265,12 +1265,12 @@ bool SlabMesh::MinCostEdgeCollapse(unsigned & eid){
 		}
 	}
 
-	// ¼ÆËãÊÇ±ß½ç±ß½øĞĞ¼ò»¯»¹ÊÇÄÚ²¿±ß½øĞĞ¼ò»¯
+	// è®¡ç®—æ˜¯è¾¹ç•Œè¾¹è¿›è¡Œç®€åŒ–è¿˜æ˜¯å†…éƒ¨è¾¹è¿›è¡Œç®€åŒ–
 	if (edges[eid].second->faces_.size() <= 1)
 		simplified_boundary_edges++;
 	else
 		simplified_inside_edges++;
-	// Ã¿´Î¼ò»¯ÁË1000Ìõ±ßÖ®ºóÊä³ö¼ò»¯½á¹û
+	// æ¯æ¬¡ç®€åŒ–äº†1000æ¡è¾¹ä¹‹åè¾“å‡ºç®€åŒ–ç»“æœ
 	if (simplified_boundary_edges + simplified_inside_edges == 1000)
 	{
 		ExportSimplifyResult();
@@ -1300,7 +1300,7 @@ bool SlabMesh::MinCostEdgeCollapse(unsigned & eid){
 		vertices[vid_tgt].second->mean_square_error = temp_mean_squre_error;
 		vertices[vid_tgt].second->hyperbolic_weight = hyperbolic_weight;
 
-		// ¸üĞÂÍØÆËĞÅÏ¢
+		// æ›´æ–°æ‹“æ‰‘ä¿¡æ¯
 		InitialTopologyProperty(vid_tgt);
 
 		for (std::set<unsigned>::iterator si = vertices[vid_tgt].second->edges_.begin(); si != vertices[vid_tgt].second->edges_.end(); si ++)
@@ -1469,7 +1469,7 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 	}
 	else
 	{
-		if (inverse_A_matrix != Matrix4d() || edges[eid].second->faces_.size() == 0)//¾ØÕó¿ÉÄæ»òÕßÖĞÖá×¶µÄÇé¿ö
+		if (inverse_A_matrix != Matrix4d() || edges[eid].second->faces_.size() == 0)//çŸ©é˜µå¯é€†æˆ–è€…ä¸­è½´é”¥çš„æƒ…å†µ
 		{
 			// add the boundary preserving.
 			//if (edges[eid].second->hyperbolic_weight >= 0.1)
@@ -1479,10 +1479,10 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 			edges[eid].second->slab_c = c1 + c2 + add_c1 + add_c2;
 			//}
 			inverse_A_matrix = edges[eid].second->slab_A.Inverse();
-			if (inverse_A_matrix != Matrix4d())//¾ØÕó¿ÉÄæ
+			if (inverse_A_matrix != Matrix4d())//çŸ©é˜µå¯é€†
 			{
 				lamdar = inverse_A_matrix * edges[eid].second->slab_b;
-				if (lamdar.W() < 0)//½â²»¶Ô
+				if (lamdar.W() < 0)//è§£ä¸å¯¹
 				{
 					Sphere mid_sphere = (vertices[v1].second->sphere + vertices[v2].second->sphere) * 0.5;
 					lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);
@@ -1561,8 +1561,8 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 	coll_cost = 0.5 * (lamdar * edges[eid].second->slab_A).Dot(lamdar) 
 		- edges[eid].second->slab_b.Dot(lamdar) + edges[eid].second->slab_c;
 
-	// µ±·¢Éú·­×ªÊ±£¬Ñ¡È¡Ã»ÓĞÒıÆğ·­×ªµÄ·½Ê½½øĞĞºÏ²¢
-	if (!Contractible(v1, v2, Wm4::Vector3d(lamdar.X(), lamdar.Y(), lamdar.Z())))//¼ÆËã³öÀ´µÄÊÕËõµã»á·¢Éú·´×ª£¬¿¼ÂÇÆäËûÈıÖÖÇé¿ö´ú¼Û×îĞ¡µÄÊÕËõµã¡£
+	// å½“å‘ç”Ÿç¿»è½¬æ—¶ï¼Œé€‰å–æ²¡æœ‰å¼•èµ·ç¿»è½¬çš„æ–¹å¼è¿›è¡Œåˆå¹¶
+	if (!Contractible(v1, v2, Wm4::Vector3d(lamdar.X(), lamdar.Y(), lamdar.Z())))//è®¡ç®—å‡ºæ¥çš„æ”¶ç¼©ç‚¹ä¼šå‘ç”Ÿåè½¬ï¼Œè€ƒè™‘å…¶ä»–ä¸‰ç§æƒ…å†µä»£ä»·æœ€å°çš„æ”¶ç¼©ç‚¹ã€‚
 	{
 		int count = 0;		
 		double *collapse_costs = new double[3];
@@ -1616,7 +1616,7 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 			//coll_cost = collapse_costs[min_index];
 			//coll_cost = 0.0;
 		}else
-			coll_cost += 1e9;//²»ÔÊĞíÊÕËõ
+			coll_cost += 1e9;//ä¸å…è®¸æ”¶ç¼©
 		delete [] collapse_costs;
 		delete [] min_sphere;
 	}
@@ -1750,7 +1750,7 @@ void SlabMesh::EvaluateEdgeHausdorffCost(unsigned eid)
 		//double temp_near_dis = NearestPoint(bou_ver, min_index);
 		//min_dis = min(temp_near_dis, min_dis);
 
-		// ¼ì²â¾àÀë×îĞ¡µãÊÇ·ñÊÇĞÂÉú³ÉµÄµã
+		// æ£€æµ‹è·ç¦»æœ€å°ç‚¹æ˜¯å¦æ˜¯æ–°ç”Ÿæˆçš„ç‚¹
 		double temp_length = abs((bou_ver - Wm4::Vector3d(lamdar.X(), lamdar.Y(), lamdar.Z())).Length() - lamdar.W());
 		//min_dis = max(temp_length, min_dis);
 
@@ -1888,7 +1888,7 @@ void SlabMesh::ReEvaluateEdgeHausdorffCost(unsigned eid)
 		unsigned temp_ind = *it;
 		Vector3d bou_ver(pmesh->pVertexList[temp_ind]->point()[0], pmesh->pVertexList[temp_ind]->point()[1], pmesh->pVertexList[temp_ind]->point()[2]);
 
-		// ¼ì²â¾àÀë×îĞ¡µãÊÇ·ñÊÇĞÂÉú³ÉµÄµã
+		// æ£€æµ‹è·ç¦»æœ€å°ç‚¹æ˜¯å¦æ˜¯æ–°ç”Ÿæˆçš„ç‚¹
 		double temp_length = abs((bou_ver - Wm4::Vector3d(lamdar.X(), lamdar.Y(), lamdar.Z())).Length() - lamdar.W());
 		//min_dis = max(temp_length, min_dis);
 
@@ -1907,7 +1907,7 @@ void SlabMesh::ReEvaluateEdgeHausdorffCost(unsigned eid)
 
 void SlabMesh::Simplify(int threshold){
 
-	// µ±¼ò»¯µ½Ğ¡ÓÚ50¸ö¶¥µãÊ±£¬²»ÔÊĞí°üº¬¶ËµãµÄ±ß½øĞĞºÏ²¢
+	// å½“ç®€åŒ–åˆ°å°äº50ä¸ªé¡¶ç‚¹æ—¶ï¼Œä¸å…è®¸åŒ…å«ç«¯ç‚¹çš„è¾¹è¿›è¡Œåˆå¹¶
 	if (numVertices <= 100)
 	{
 		if (initial_boundary_preserve == false)
@@ -1926,7 +1926,7 @@ void SlabMesh::Simplify(int threshold){
 
 						if (vertices[index].second->edges_.size() == 1 && vertices[index].second->faces_.size() == 0)
 						{
-                            edges[*si].second->topo_contractable = false;//ÊıÁ¿½ÏÉÙÊ±£¬ÁôÏÂÀ´µÄ·ÖÖ§¿ÉÄÜÊÇ¹Ç÷À²¿·Ö£¬²»ÒªÊÕËõ
+                            edges[*si].second->topo_contractable = false;//æ•°é‡è¾ƒå°‘æ—¶ï¼Œç•™ä¸‹æ¥çš„åˆ†æ”¯å¯èƒ½æ˜¯éª¨éª¼éƒ¨åˆ†ï¼Œä¸è¦æ”¶ç¼©
 						}
 					}
 				}
@@ -2082,7 +2082,7 @@ double SlabMesh::NearestPoint(Vector3d point, unsigned vid)
 // simple method, do not add any plane to preserve the boundary 
 void SlabMesh::PreservBoundaryMethodOne()
 {
-	// ¸øËùÓĞµÄboundary_edge¼ÓÉÏ±ß½ç±£»¤
+	// ç»™æ‰€æœ‰çš„boundary_edgeåŠ ä¸Šè¾¹ç•Œä¿æŠ¤
 	for (unsigned i = 0; i < edges.size(); i++)
 	{
 		if (!edges[i].first || !edges[i].second->fake_boundary_edge)
@@ -2113,7 +2113,7 @@ void SlabMesh::PreservBoundaryMethodOne()
 				if (st[0].normal == Vector3d(0., 0., 0.) || st[1].normal == Vector3d(0., 0., 0.))
 					continue;
 
-				// ¼ÓµÚÒ»¸öslabÖĞµÄÁ½¸öÆ½Ãæ
+				// åŠ ç¬¬ä¸€ä¸ªslabä¸­çš„ä¸¤ä¸ªå¹³é¢
 				Vector4d normal1(st[0].normal.X(), st[0].normal.Y(), st[0].normal.Z(), 1.0);
 				Vector4d normal2(st[1].normal.X(), st[1].normal.Y(), st[1].normal.Z(), 1.0);
 				// compute the matrix of A
@@ -2141,7 +2141,7 @@ void SlabMesh::PreservBoundaryMethodOne()
 					vertices[ver_index[i]].second->add_c += temp_c2;
 				}
 
-				// ¼ÓµÚ¶ş¸öslabÖĞµÄÁ½¸öÆ½Ãæ
+				// åŠ ç¬¬äºŒä¸ªslabä¸­çš„ä¸¤ä¸ªå¹³é¢
 				Vector3d ver1_to_ver2 = ver[0].center - ver[1].center;
 				Vector3d t1 = ver1_to_ver2.Cross(st[0].normal);
 				Vector3d t2 = ver1_to_ver2.Cross(st[1].normal);
@@ -2172,7 +2172,7 @@ void SlabMesh::PreservBoundaryMethodOne()
 				}
 			}
 
-			//// ¶ÔÓÚ±©Â¶³öÀ´µÄµãÔÙ¼ÓÒ»¸ö±£»¤Æ½Ãæ
+			//// å¯¹äºæš´éœ²å‡ºæ¥çš„ç‚¹å†åŠ ä¸€ä¸ªä¿æŠ¤å¹³é¢
 			//if (vertices[ver_index[0]].second->edges_.size() == 1)
 			//{
 			//	Vector3d ver1_to_ver2 = ver[0].center - ver[1].center;
@@ -2248,7 +2248,7 @@ void SlabMesh::PreservBoundaryMethodTwo()
 
 			vertices[i].second->boundVec = add_normal;
 
-			// È·¶¨Ôö¼ÓµÄÃæµÄÈ¨ÖØ´óĞ¡
+			// ç¡®å®šå¢åŠ çš„é¢çš„æƒé‡å¤§å°
 			//Vector3d boudary_vec[2];
 			//for (int index = 0; index < 2; index++)
 			//{
@@ -2260,18 +2260,18 @@ void SlabMesh::PreservBoundaryMethodTwo()
 			//}
 			//vertices[i].second->collaspe_weight = sin(VectorAngle(boudary_vec[0], boudary_vec[1]));
 
-			// ÅĞ¶ÏÕâ¸ö±ß½çµãÊÇÊôÓÚÍ¹³öÀ´µÄµã»¹ÊÇ°¼½øÈ¥µÄµã
+			// åˆ¤æ–­è¿™ä¸ªè¾¹ç•Œç‚¹æ˜¯å±äºå‡¸å‡ºæ¥çš„ç‚¹è¿˜æ˜¯å‡¹è¿›å»çš„ç‚¹
 			bool boundary_vertex = false;
 			for (auto si = vertices[i].second->edges_.begin(); si != vertices[i].second->edges_.end(); si++)
 			{
 				unsigned temp_ind = edges[*si].second->vertices_.first == i ? edges[*si].second->vertices_.second 
 					: edges[*si].second->vertices_.first;
 				Vector3d temp_vec = vertices[temp_ind].second->sphere.center - vertices[i].second->sphere.center;
-                double temp_angle = acos(temp_vec.Dot(add_normal) / temp_vec.Length());//add_normalÏòÄÚ
+                double temp_angle = acos(temp_vec.Dot(add_normal) / temp_vec.Length());//add_normalå‘å†…
 				boundary_vertex = temp_angle < Wm4::Math<double>::PI / 2.0 ? true : false;
 				if (boundary_vertex == true)
 				{
-                    vertices[i].second->boundary_vertex = true;//Í¹³öÀ´
+                    vertices[i].second->boundary_vertex = true;//å‡¸å‡ºæ¥
 					break;
 				}
 			}
@@ -2352,7 +2352,7 @@ void SlabMesh::PreservBoundaryMethodThree()
 
 			vertices[i].second->boundVec = add_normal;
 
-			// È·¶¨Ôö¼ÓµÄÃæµÄÈ¨ÖØ´óĞ¡
+			// ç¡®å®šå¢åŠ çš„é¢çš„æƒé‡å¤§å°
 			//Vector3d boudary_vec[2];
 			//for (int index = 0; index < 2; index++)
 			//{
@@ -2364,7 +2364,7 @@ void SlabMesh::PreservBoundaryMethodThree()
 			//}
 			//vertices[i].second->collaspe_weight = sin(VectorAngle(boudary_vec[0], boudary_vec[1]));
 
-			// ÅĞ¶ÏÕâ¸ö±ß½çµãÊÇÊôÓÚÍ¹³öÀ´µÄµã»¹ÊÇ°¼½øÈ¥µÄµã
+			// åˆ¤æ–­è¿™ä¸ªè¾¹ç•Œç‚¹æ˜¯å±äºå‡¸å‡ºæ¥çš„ç‚¹è¿˜æ˜¯å‡¹è¿›å»çš„ç‚¹
 			bool boundary_vertex = false;
 			for (auto si = vertices[i].second->edges_.begin(); si != vertices[i].second->edges_.end(); si++)
 			{
@@ -2401,7 +2401,7 @@ void SlabMesh::PreservBoundaryMethodThree()
 		}
 	}
 
-	// ¸øËùÓĞµÄboundary_edge¼ÓÉÏ±ß½ç±£»¤
+	// ç»™æ‰€æœ‰çš„boundary_edgeåŠ ä¸Šè¾¹ç•Œä¿æŠ¤
 	for (unsigned i = 0; i < edges.size(); i++)
 	{
 		if (edges[i].first && edges[i].second->faces_.size() == 1)
@@ -2426,7 +2426,7 @@ void SlabMesh::PreservBoundaryMethodThree()
 			Vector3d t1 = ver1_to_ver2.Cross(temp_normal1);
 			Vector3d t2 = ver1_to_ver2.Cross(temp_normal2);
 
-			// ¶ÔÓÚboundary_edge¼ÓÉÏÒ»¸öslab½øĞĞ±ß½ç±£»¤
+			// å¯¹äºboundary_edgeåŠ ä¸Šä¸€ä¸ªslabè¿›è¡Œè¾¹ç•Œä¿æŠ¤
 			Vector4d normal1(t1.X(), t1.Y(), t1.Z(), 1.0);
 			Vector4d normal2(t2.X(), t2.Y(), t2.Z(), 1.0);
 
@@ -2467,7 +2467,7 @@ void SlabMesh::PreservBoundaryMethodThree()
 
 void SlabMesh::PreservBoundaryMethodFour()
 {
-	// ¸øËùÓĞµÄboundary_edge¼ÓÉÏ±ß½ç±£»¤
+	// ç»™æ‰€æœ‰çš„boundary_edgeåŠ ä¸Šè¾¹ç•Œä¿æŠ¤
 	for (unsigned i = 0; i < edges.size(); i++)
 	{
 		if (!edges[i].first || !edges[i].second->fake_boundary_edge)
@@ -2501,14 +2501,14 @@ void SlabMesh::PreservBoundaryMethodFour()
 			if (dir == false)
 				temp_nor *= -1;
 
-			// ¶ÔÓÚboundary_edge¼ÓÉÏÒ»¸öÆ½Ãæ½øĞĞ±ß½ç±£»¤£¬±ß½ç±£»¤µÄ·½·¨ÊÇÊ¹ÊÕËõµãÄÚÇĞÓÚ±ß½çÖĞÖá×¶£¨Cone£©
+			// å¯¹äºboundary_edgeåŠ ä¸Šä¸€ä¸ªå¹³é¢è¿›è¡Œè¾¹ç•Œä¿æŠ¤ï¼Œè¾¹ç•Œä¿æŠ¤çš„æ–¹æ³•æ˜¯ä½¿æ”¶ç¼©ç‚¹å†…åˆ‡äºè¾¹ç•Œä¸­è½´é”¥ï¼ˆConeï¼‰
 			Vector4d normal1(temp_nor.X(), temp_nor.Y(), temp_nor.Z(), 1.0);
 			// compute the matrix of A
 			Matrix4d temp_A1;
 			temp_A1.MakeTensorProduct(normal1, normal1);
 			temp_A1 *= 2.0;
 
-			// ¶Ô²»Í¬ratioµÄ±ß½øĞĞÓ³Éä´¦Àí£¬Ğ¡ÓÚ0.2µÄ²»×ö´¦Àí£¬(0.2,1)Ó³Éäµ½(2, 10)
+			// å¯¹ä¸åŒratioçš„è¾¹è¿›è¡Œæ˜ å°„å¤„ç†ï¼Œå°äº0.2çš„ä¸åšå¤„ç†ï¼Œ(0.2,1)æ˜ å°„åˆ°(2, 10)
 			double ratio = GetRatioHyperbolicEuclid(i);
 			double w1 = 1.0;
 			//w1 = 0.02 * ratio * ratio * ratio * ratio * ratio * ratio;
@@ -2520,7 +2520,7 @@ void SlabMesh::PreservBoundaryMethodFour()
 			//	w1 = (ratio - 0.3) / 0.7 * (3 - 1) + 1;
 			//}
 
-			for (int i = 0; i < 2; i++)//0,1ÊÇ±ß½çµã
+			for (int i = 0; i < 2; i++)//0,1æ˜¯è¾¹ç•Œç‚¹
 			{	
 				Vector4d C1(ver[i].center.X(), ver[i].center.Y(), ver[i].center.Z(), ver[i].radius);
 
@@ -2535,7 +2535,7 @@ void SlabMesh::PreservBoundaryMethodFour()
 				vertices[ver_index[i]].second->add_b += temp_b1 * bound_weight * w1;
 				vertices[ver_index[i]].second->add_c += temp_c1 * bound_weight * w1;
 			}
-        }else if (edges[i].second->faces_.size() == 0)//Ã»ÓĞ¹ØÁªÖĞÖá¼Ğ°å£¬¼ÆËãµ½ÖĞÖá×¶µÄÎó²î
+        }else if (edges[i].second->faces_.size() == 0)//æ²¡æœ‰å…³è”ä¸­è½´å¤¹æ¿ï¼Œè®¡ç®—åˆ°ä¸­è½´é”¥çš„è¯¯å·®
 		{
 			unsigned ver_index[2];
 			ver_index[0] = se.vertices_.first;
@@ -2559,7 +2559,7 @@ void SlabMesh::PreservBoundaryMethodFour()
 				if (st[0].normal == Vector3d(0., 0., 0.) || st[1].normal == Vector3d(0., 0., 0.))
 					continue;
 
-				// ¼ÓµÚÒ»¸öslabÖĞµÄÁ½¸öÆ½Ãæ
+				// åŠ ç¬¬ä¸€ä¸ªslabä¸­çš„ä¸¤ä¸ªå¹³é¢
 				Vector4d normal1(st[0].normal.X(), st[0].normal.Y(), st[0].normal.Z(), 1.0);
 				Vector4d normal2(st[1].normal.X(), st[1].normal.Y(), st[1].normal.Z(), 1.0);
 				// compute the matrix of A
@@ -2587,7 +2587,7 @@ void SlabMesh::PreservBoundaryMethodFour()
 					vertices[ver_index[i]].second->add_c += temp_c2;
 				}
 
-                // ¼ÓµÚ¶ş¸öslabÖĞµÄÁ½¸öÆ½Ãæ£¬Ïàµ±ÓÚÈÆv1v2Ğı×ª90¶È
+                // åŠ ç¬¬äºŒä¸ªslabä¸­çš„ä¸¤ä¸ªå¹³é¢ï¼Œç›¸å½“äºç»•v1v2æ—‹è½¬90åº¦
 				Vector3d ver1_to_ver2 = ver[0].center - ver[1].center;
 				Vector3d t1 = ver1_to_ver2.Cross(st[0].normal);
 				Vector3d t2 = ver1_to_ver2.Cross(st[1].normal);
@@ -2624,7 +2624,7 @@ void SlabMesh::PreservBoundaryMethodFour()
 			w1 = 0.1 * ratio * ratio;
 			//w1 = 1 * ratio * ratio * ratio * ratio * ratio * ratio;
 			//w1 = 1 * ratio * ratio * ratio;
-			// ¶ÔÓÚ±©Â¶³öÀ´µÄµãÔÙ¼ÓÒ»¸ö±£»¤Æ½Ãæ
+			// å¯¹äºæš´éœ²å‡ºæ¥çš„ç‚¹å†åŠ ä¸€ä¸ªä¿æŠ¤å¹³é¢
 			if (vertices[ver_index[0]].second->edges_.size() == 1)
 			{
 
@@ -2959,7 +2959,7 @@ void SlabMesh::InitialTopologyProperty(unsigned vid) {
 
 				if (index3 == vid)
 				{
-					// Èı¸öµãĞÎ³ÉÁË»·Â·£¬¼ì²âÊÇÃæ»¹ÊÇhole
+					// ä¸‰ä¸ªç‚¹å½¢æˆäº†ç¯è·¯ï¼Œæ£€æµ‹æ˜¯é¢è¿˜æ˜¯hole
 					bool is_hole = true;
 					for (set<unsigned>::iterator fi = fir_faces.begin(); fi != fir_faces.end(); fi++) 
 					{
@@ -2971,7 +2971,7 @@ void SlabMesh::InitialTopologyProperty(unsigned vid) {
 						}
 					}
 
-                    if (is_hole)//ÓĞ¶´¿ÉÄÜÊÇ¹Ü×´²¿·Ö£¬²»ÒªÆÆ»µ
+                    if (is_hole)//æœ‰æ´å¯èƒ½æ˜¯ç®¡çŠ¶éƒ¨åˆ†ï¼Œä¸è¦ç ´å
 					{
 						if (edges[*si].second->faces_.size() <= 1 && edges[*si2].second->faces_.size() <= 1 
 							&& edges[*si3].second->faces_.size() <= 1)
@@ -2986,7 +2986,7 @@ void SlabMesh::InitialTopologyProperty(unsigned vid) {
 		}
 	}
 
-	// µ±¼ò»¯µ½Ğ¡ÓÚ50¸ö¶¥µãÊ±£¬²»ÔÊĞí°üº¬¶ËµãµÄ±ß½øĞĞºÏ²¢
+	// å½“ç®€åŒ–åˆ°å°äº50ä¸ªé¡¶ç‚¹æ—¶ï¼Œä¸å…è®¸åŒ…å«ç«¯ç‚¹çš„è¾¹è¿›è¡Œåˆå¹¶
 	if (numVertices <= 100)
 	{
 		for (set<unsigned>::iterator si = fir_edges.begin(); si != fir_edges.end(); si++)

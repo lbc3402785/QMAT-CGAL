@@ -727,6 +727,17 @@ void NonManifoldMesh::Export(std::string fname) {
 		fout << "f " << MappingIdtoGVD(g,g->tris[i].vid[0]) << ' ' << MappingIdtoGVD(g,g->tris[i].vid[1]) << ' ' << MappingIdtoGVD(g,g->tris[i].vid[2]) << std::endl;
 	*/
 	fout.close();
-
-
+    std::string mapname = fname;
+    mapname += ".map";
+    std::ofstream fmapout(mapname);
+    fmapout << numVertices<< std::endl;
+    for (unsigned i = 0; i < vertices.size(); i++){
+        fmapout << "bplist";
+        set<unsigned>::iterator itr;
+        for(itr=vertices[i].second->bplist.begin();itr!=vertices[i].second->bplist.end();itr++){
+            fmapout << " "<<*itr;
+        }
+        fmapout << std::endl;
+    }
+    fmapout.close();
 }

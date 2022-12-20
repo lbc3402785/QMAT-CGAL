@@ -31,7 +31,7 @@ private:
     FT nearestPointOfLine(Point p,Point a,Point b);
     int checkPointInTriangle(Point p,Point a,Point b,Point c);
 public:
-    Mesh input;		// the mesh of the input shape
+    Mesh input;		// the mesh of the input shape 用来四面体化的数据
 
     unsigned num_vor_v, num_vor_e, num_vor_f;
 

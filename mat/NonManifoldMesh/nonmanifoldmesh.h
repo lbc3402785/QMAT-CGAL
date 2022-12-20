@@ -25,7 +25,7 @@ public:
 public:
 	//Wm4::Vector3d pos;
 	int tag;
-	std::set<unsigned> bplist; // boundary point list ÖĞÖáµã¹ØÁªµÄµÄËÄÃæÌåËÄ¸öµãĞòºÅ
+	std::set<unsigned> bplist; // boundary point list ä¸­è½´ç‚¹å…³è”çš„çš„å››é¢ä½“å››ä¸ªç‚¹åºå·
 	
 	// distance criterion
 	//double radius;

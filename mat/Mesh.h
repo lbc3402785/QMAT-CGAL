@@ -7,9 +7,7 @@
 #include <CGAL/IO/Polyhedron_iostream.h>
 #include <CGAL/convex_hull_2.h>
 
-#include <CGAL/Delaunay_triangulation_3.h>
-#include <CGAL/Delaunay_triangulation_cell_base_3.h>
-#include <CGAL/Triangulation_vertex_base_with_info_3.h>
+
 #include <CGAL/Mesh_triangulation_3.h>
 #include <CGAL/Mesh_complex_3_in_triangulation_3.h>
 #include <CGAL/Mesh_criteria_3.h>
@@ -24,10 +22,9 @@
 
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Delaunay_triangulation_3.h>
-
 #include <CGAL/Triangulation_vertex_base_with_info_3.h>
 #include <CGAL/Triangulation_cell_base_with_info_3.h>
-#include <CGAL/Delaunay_triangulation_cell_base_with_circumcenter_3.h>
+
 #include <CGAL/Cartesian_d.h>
 #include <CGAL/Min_sphere_d.h>
 #include <CGAL/Min_sphere_annulus_d_traits_d.h>
@@ -68,11 +65,11 @@ public:
 class CellInfo
 {
 public:
-	bool inside;
+	bool inside;//在网格内部
 	int id;
 	int tag;
-	bool is_pole;
-	std::set<unsigned int> pole_bplist;
+    bool is_pole;//四面体是否有效，暂时不用
+    std::set<unsigned int> pole_bplist;//有效地四面体关联的有限点
 	double dist_center_to_boundary; // approximate 
     int faceCount=0;
 };
@@ -81,7 +78,6 @@ public:
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
 typedef CGAL::Triangulation_vertex_base_with_info_3<VertexInfo, K> Vb;
 typedef CGAL::Triangulation_cell_base_with_info_3<CellInfo, K> Cb;
-//typedef CGAL::Delaunay_triangulation_cell_base_with_circumcenter_3 <CellInfo, K> Cb;
 typedef CGAL::Triangulation_data_structure_3<Vb, Cb> Tds;
 //typedef CGAL::Delaunay_triangulation_3<K, Tds> Triangulation;
 
@@ -309,10 +305,10 @@ public:
 	unsigned int m_nb_boundaries;
 	int m_genus;
 
-	std::vector<Vertex_iterator> pVertexList;
+    std::vector<Vertex_iterator> pVertexList;//用来四面体化的顶点坐标和序号
 	std::vector<Facet_iterator> pFaceList;
     std::vector<std::vector<int>> faces;
-
+    std::map<std::pair<int,int>,bool> edgeMap;
 public:
 	DENSITYPOLICY m_density_policy;
 	METRICPOLICY m_metric_policy;

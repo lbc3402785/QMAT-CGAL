@@ -30,8 +30,11 @@ void ThreeDimensionalShape::ComputeInputNMM()
     len[3] = sqrt(len[0]*len[0]+len[1]*len[1]+len[2]*len[2]);
     input_nmm.diameter = len[3];
 
-    for(Finite_vertices_iterator_t fvi = pt->finite_vertices_begin(); fvi != pt->finite_vertices_end(); fvi ++)
-        input_nmm.BoundaryPoints.push_back(SamplePoint(fvi->point()[0], fvi->point()[1], fvi->point()[2]));//可能有一部分点重合，所有这里没有包括所有网格点
+    for(Finite_vertices_iterator_t fvi = pt->finite_vertices_begin(); fvi != pt->finite_vertices_end(); fvi ++){
+        SamplePoint sample(fvi->point()[0], fvi->point()[1], fvi->point()[2]);
+        sample.tag=fvi->info().tag;
+        input_nmm.BoundaryPoints.push_back(sample);//可能有一部分点重合，所有这里没有包括所有网格点
+    }
     int mas_vertex_count(0);
     for(Finite_cells_iterator_t fci = pt->finite_cells_begin(); fci != pt->finite_cells_end(); fci ++)
     {
@@ -40,9 +43,13 @@ void ThreeDimensionalShape::ComputeInputNMM()
             fci->info().tag = -1;
             continue;
         }
+        int onSurfaceCount = facetCount(fci);//统计四面体有几个边界面
+//        if (0 ==onSurfaceCount)
+//        {
+//            fci->info().tag = -1;
+//            continue;
+//        }
         fci->info().tag = mas_vertex_count ++;
-
-
         Bool_VertexPointer bvp;//中轴点（四面体外接球球心）
         bvp.first = true;
         bvp.second = new NonManifoldMesh_Vertex;
@@ -65,27 +72,27 @@ void ThreeDimensionalShape::ComputeInputNMM()
 
         //        }
 
-        int onSurfaceCount=facetCount(fci);
+        
         fci->info().faceCount=onSurfaceCount;
         Point center(circumCenter[0],circumCenter[1],circumCenter[2]);
         switch(onSurfaceCount){
-        case 0:{
+       case 0:{
             switch(side){
             case CGAL::ON_UNBOUNDED_SIDE:{
                 (*bvp.second).sphere.center = to_wm4(circumCenter);
                 (*bvp.second).sphere.radius =std::min(circumRadius,std::min(distCenterToBoundary(circumCenter),distCenterToBoundary(fci,center)));
-                std::cout<<"gaga"<<std::endl;
+                //std::cout<<"gaga"<<std::endl;
                 break;
             }
             case CGAL::ON_BOUNDARY:
             case CGAL::ON_BOUNDED_SIDE:
                 (*bvp.second).sphere.center = to_wm4(circumCenter);
                 (*bvp.second).sphere.radius =std::min(circumRadius,std::min(distCenterToBoundary(circumCenter),distCenterToBoundary(fci,center)));/*distCenterToBoundary(fci,center);*/
-                std::cout<<"wawa"<<std::endl;
+                //std::cout<<"wawa"<<std::endl;
                 break;
 
             }
-            std::cout<<"0 facet"<<std::endl;
+            //std::cout<<"0 facet"<<std::endl;
             break;
         }
         case 1:
@@ -114,7 +121,7 @@ void ThreeDimensionalShape::ComputeInputNMM()
         //Point_t inscribed =pt->inscribeSphereCenter(pt->tetrahedron(fci),&inscribedRadius);
         (*bvp.second).is_pole = fci->info().is_pole;
         for (unsigned k = 0; k < 4; k++) {
-            (*bvp.second).bplist.insert(fci->vertex(k)->info().id);
+            (*bvp.second).bplist.insert(fci->vertex(k)->info().id);//关联样本点id
         }
         //(*bvp.second).sphere.radius = pt->TetCircumRadius(pt->tetrahedron(fci));
 
@@ -134,6 +141,9 @@ void ThreeDimensionalShape::ComputeInputNMM()
         {
             if( (ffi->first->info().inside == false) || (pt->mirror_facet(*ffi).first->info().inside == false) )
                 continue;
+//            if(-1==ffi->first->info().tag|| -1==(pt->mirror_facet(*ffi).first->info().tag)){//add by me
+//                continue;
+//            }
             Bool_EdgePointer bep;//中轴边
             bep.first = true;
             bep.second = new NonManifoldMesh_Edge;
@@ -148,20 +158,25 @@ void ThreeDimensionalShape::ComputeInputNMM()
     }
     for(Finite_edges_iterator_t fei = pt->finite_edges_begin(); fei != pt->finite_edges_end(); fei ++)
     {
+//        if(-1==fei->first->info().tag){//add by me
+//            continue;
+//        }
         bool all_finite_inside = true;
         std::vector<Cell_handle_t> vec_ch;
-        Cell_circulator_t cc = pt->incident_cells(*fei);
+        Cell_circulator_t cc = pt->incident_cells(*fei);//边的所有入射四面体
         do
         {
             if(pt->is_infinite(cc))
                 all_finite_inside = false;
             else if(cc->info().inside == false)
                 all_finite_inside = false;
+//            else if (cc->info().tag == -1)//add by me
+//                all_finite_inside = false;
             vec_ch.push_back(cc++);
         }while(cc != pt->incident_cells(*fei));
         if(!all_finite_inside)
             continue;
-        for(unsigned k = 2; k < vec_ch.size() - 1; k ++)//0--1,0--(k-1) 这两条边是两个对偶面入射四面体的球心，在面的循环中已经加入
+        for(unsigned k = 2; k < vec_ch.size() - 1; k ++)//0--1,1--2,2--3,...,(k-2)--(k-1),(k-1)--0 这些边是两个对偶面入射四面体的球心，在面的循环中已经加入
         {
             Bool_EdgePointer bep;
             bep.first = true;
@@ -613,15 +628,25 @@ double ThreeDimensionalShape::distCenterToBoundary(Point_t dtPoint)
     switch(lt){
     case Triangulation::VERTEX:
         std::cout<<"VERTEX"<<std::endl;
+        return 0;
+    case Triangulation::EDGE:{
+        int vi=cell->vertex(li)->info().id;
+        int vj=cell->vertex(lj)->info().id;
+        std::pair<int,int> edgeij=std::make_pair(vi<vj?vi:vj,vi<vj?vj:vi);
+        if(input.edgeMap.count(edgeij)>0){
+            std::cout<<"EDGE"<<std::endl;
+            return 0;
+        }
         break;
-    case Triangulation::EDGE:
-        std::cout<<"EDGE"<<std::endl;
-        break;
+    }
     case Triangulation::FACET:
-        std::cout<<"FACET"<<std::endl;
+        if(!cell->neighbor(li)->info().inside){
+            std::cout<<"FACET"<<std::endl;
+            return 0;
+        }
         break;
     case Triangulation::CELL:
-        std::cout<<"CELL"<<std::endl;
+        //std::cout<<"CELL"<<std::endl;
         
         break;
     default:
@@ -747,72 +772,77 @@ int ThreeDimensionalShape::facetCount(const Finite_cells_iterator_t &fci)
     int count=0;
 
     for(int k=0;k<4;++k){
-        int vk0=fci->vertex(k)->info().id;
-        int vk1=fci->vertex((k+1)%4)->info().id;
-        int vk2=fci->vertex((k+2)%4)->info().id;
-        std::vector<int> fk={vk0,vk1,vk2};
-        Halfedge_around_vertex_circulator hav0 =input.pVertexList[vk0]->vertex_begin();
-        Halfedge_around_vertex_circulator hav1 =input.pVertexList[vk1]->vertex_begin();
-        Halfedge_around_vertex_circulator hav2 =input.pVertexList[vk2]->vertex_begin();
-        bool skip=false;
-        do{
-            if (hav0->facet() != nullptr) {
-                Facet_handle f=hav0->facet();
-                if(visitMap.count(f)==0){
-                    Halfedge_handle h=hav0->facet()->halfedge();
-                    int v0=h->vertex()->id;
-                    int v1=h->next()->vertex()->id;
-                    int v2=h->next()->next()->vertex()->id;
-                    std::vector<int> fh={v0,v1,v2};
-                    if(checkEqual(fh,fk)){
-                        count++;
-                        skip=true;
-                        break;
-                    }
-                }
-                visitMap[f]=true;
-            }
-            hav0++;
-        }while(hav0 !=input.pVertexList[vk0]->vertex_begin());
-        if(skip)continue;
-        do{
-            if (hav1->facet() != nullptr) {
-                Facet_handle f=hav1->facet();
-                if(visitMap.count(f)==0){
-                    Halfedge_handle h=hav1->facet()->halfedge();
-                    int v0=h->vertex()->id;
-                    int v1=h->next()->vertex()->id;
-                    int v2=h->next()->next()->vertex()->id;
-                    std::vector<int> fh={v0,v1,v2};
-                    if(checkEqual(fh,fk)){
-                        count++;
-                        skip=true;
-                        break;
-                    }
-                }
-                visitMap[f]=true;
-            }
-            hav1++;
-        }while(hav1 !=input.pVertexList[vk1]->vertex_begin());
-        if(skip)continue;
-        do{
-            if (hav2->facet() != nullptr) {
-                Facet_handle f=hav2->facet();
-                if(visitMap.count(f)==0){
-                    Halfedge_handle h=hav2->facet()->halfedge();
-                    int v0=h->vertex()->id;
-                    int v1=h->next()->vertex()->id;
-                    int v2=h->next()->next()->vertex()->id;
-                    std::vector<int> fh={v0,v1,v2};
-                    if(checkEqual(fh,fk)){
-                        count++;
-                        break;
-                    }
-                }
-                visitMap[f]=true;
-            }
-            hav2++;
-        }while(hav2 !=input.pVertexList[vk2]->vertex_begin());
+        if(!fci->neighbor(k)->info().inside){
+            count++;
+        }
     }
+//    for(int k=0;k<4;++k){
+//        int vk0=fci->vertex(k)->info().id;
+//        int vk1=fci->vertex((k+1)%4)->info().id;
+//        int vk2=fci->vertex((k+2)%4)->info().id;
+//        std::vector<int> fk={vk0,vk1,vk2};
+//        Halfedge_around_vertex_circulator hav0 =input.pVertexList[vk0]->vertex_begin();
+//        Halfedge_around_vertex_circulator hav1 =input.pVertexList[vk1]->vertex_begin();
+//        Halfedge_around_vertex_circulator hav2 =input.pVertexList[vk2]->vertex_begin();
+//        bool skip=false;
+//        do{
+//            if (hav0->facet() != nullptr) {
+//                Facet_handle f=hav0->facet();
+//                if(visitMap.count(f)==0){
+//                    Halfedge_handle h=hav0->facet()->halfedge();
+//                    int v0=h->vertex()->id;
+//                    int v1=h->next()->vertex()->id;
+//                    int v2=h->next()->next()->vertex()->id;
+//                    std::vector<int> fh={v0,v1,v2};
+//                    if(checkEqual(fh,fk)){
+//                        count++;
+//                        skip=true;
+//                        break;
+//                    }
+//                }
+//                visitMap[f]=true;
+//            }
+//            hav0++;
+//        }while(hav0 !=input.pVertexList[vk0]->vertex_begin());
+//        if(skip)continue;
+//        do{
+//            if (hav1->facet() != nullptr) {
+//                Facet_handle f=hav1->facet();
+//                if(visitMap.count(f)==0){
+//                    Halfedge_handle h=hav1->facet()->halfedge();
+//                    int v0=h->vertex()->id;
+//                    int v1=h->next()->vertex()->id;
+//                    int v2=h->next()->next()->vertex()->id;
+//                    std::vector<int> fh={v0,v1,v2};
+//                    if(checkEqual(fh,fk)){
+//                        count++;
+//                        skip=true;
+//                        break;
+//                    }
+//                }
+//                visitMap[f]=true;
+//            }
+//            hav1++;
+//        }while(hav1 !=input.pVertexList[vk1]->vertex_begin());
+//        if(skip)continue;
+//        do{
+//            if (hav2->facet() != nullptr) {
+//                Facet_handle f=hav2->facet();
+//                if(visitMap.count(f)==0){
+//                    Halfedge_handle h=hav2->facet()->halfedge();
+//                    int v0=h->vertex()->id;
+//                    int v1=h->next()->vertex()->id;
+//                    int v2=h->next()->next()->vertex()->id;
+//                    std::vector<int> fh={v0,v1,v2};
+//                    if(checkEqual(fh,fk)){
+//                        count++;
+//                        break;
+//                    }
+//                }
+//                visitMap[f]=true;
+//            }
+//            hav2++;
+//        }while(hav2 !=input.pVertexList[vk2]->vertex_begin());
+//    }
     return count;
 }

@@ -170,6 +170,17 @@ void MPMesh::GenerateFaceList()
     {
         pFaceList.push_back(pFacet);
         pFacet->id = idx;
+        int v0=pFacet->halfedge()->vertex()->id;
+        int v1=pFacet->halfedge()->next()->vertex()->id;
+        int v2=pFacet->halfedge()->next()->next()->vertex()->id;
+        std::pair<int,int> edge01=std::make_pair((v0<v1?v0:v1),(v0<v1?v1:v0));
+        edgeMap[edge01]=true;
+
+        std::pair<int,int> edge02=std::make_pair((v0<v2?v0:v2),(v0<v2?v2:v0));
+        edgeMap[edge02]=true;
+
+        std::pair<int,int> edge12=std::make_pair((v1<v2?v1:v2),(v1<v2?v2:v1));
+        edgeMap[edge12]=true;
     }
 }
 
@@ -1315,7 +1326,7 @@ void MPMesh::computedt()
         if(!inside_boundingbox(cent_wm4))
             fci->info().inside = false;
         else{
-            fci->info().inside = (domain->is_in_domain_object()(cent) > 0);//�����Ƿ�����������
+            fci->info().inside = (domain->is_in_domain_object()(cent) > 0);//球心是否在整个域内
         }
     }
 }
@@ -1342,17 +1353,17 @@ void MPMesh::markpoles()
     {
         Vector3d p = to_wm4(fvi->point());
         std::vector<Cell_handle_t> fic;
-        dt.finite_incident_cells(fvi,std::back_inserter(fic));
+        dt.finite_incident_cells(fvi,std::back_inserter(fic));//某个点关联的所有入射四面体
         double ld(0);
         Cell_handle_t ld_ch;
         bool found = false;
-        for(unsigned i = 0; i < fic.size(); i ++)
+        for(unsigned i = 0; i < fic.size(); i ++)//遍历有限点关联的所有四面体
         {
-            if(fic[i]->info().inside)
+            if(fic[i]->info().inside)//这个四面体在网格内部
             {
-                Vector3d cp = to_wm4(fic[i]->circumcenter());
+                Vector3d cp = to_wm4(fic[i]->circumcenter());//四面体外接球球心
                 double td = (p-cp).SquaredLength();
-                if(td > ld)//�����������Զ��������
+                if(td > ld)//距离采样点最远的中轴球
                 {
                     ld = td;
                     ld_ch = fic[i];
@@ -1363,7 +1374,7 @@ void MPMesh::markpoles()
         if(found)
         {
             ld_ch->info().is_pole = true;
-            ld_ch->info().pole_bplist.insert(fvi->info().id);
+            ld_ch->info().pole_bplist.insert(fvi->info().id);//有效地四面体关联的有限点
         }
     }
 
