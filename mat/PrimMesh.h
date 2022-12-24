@@ -30,9 +30,9 @@ public:
 	// vertex property
 	bool fake_boundary_vertex;
 	bool boundary_vertex;
-	bool saved_vertex;
-	bool non_manifold_vertex;
-	set<unsigned> boundary_edge_vec;
+    bool saved_vertex;//是否收缩产生的新点
+    bool non_manifold_vertex;//非流行点标志
+    set<unsigned> boundary_edge_vec;//关联的边界边
 	Wm4::Vector3d boundVec;
 
 public:
@@ -56,7 +56,7 @@ public:
 	virtual ~PrimEdge(){};
 
 public:
-	Sphere sphere;
+    Sphere sphere;//收缩目标
 	Cone cone;
 	bool valid_cone;
 
@@ -66,9 +66,9 @@ public:
 	unsigned index;
 
 public:
-	bool fake_boundary_edge;
+    bool fake_boundary_edge;//是否边界边
 	bool boundary_edge;
-	bool non_manifold_edge;
+    bool non_manifold_edge;//非流行边标志
     bool topo_contractable;//是否可收缩
 };
 
@@ -180,7 +180,7 @@ public:
 
 public:
 	std::priority_queue<EdgeInfo> edge_collapses_queue;
-	std::priority_queue<EdgeInfo> boundary_edge_collapses_queue;
+    std::priority_queue<EdgeInfo> boundary_edge_collapses_queue;//收缩点关联的边
 
 };
 

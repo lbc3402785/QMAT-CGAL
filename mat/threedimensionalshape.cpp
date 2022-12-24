@@ -235,10 +235,10 @@ void ThreeDimensionalShape::ComputeInputNMM()
 }
 void ThreeDimensionalShape::LoadInputNMM(std::string fname){
     std::ifstream mastream(fname.c_str());
-    NonManifoldMesh newinputnmm;
-    newinputnmm.numVertices = 0;
-    newinputnmm.numEdges = 0;
-    newinputnmm.numFaces = 0;
+//    NonManifoldMesh newinputnmm;
+//    newinputnmm.numVertices = 0;
+//    newinputnmm.numEdges = 0;
+//    newinputnmm.numFaces = 0;
     int nv, ne, nf;
     mastream >> nv >> ne >> nf;
 
@@ -252,15 +252,15 @@ void ThreeDimensionalShape::LoadInputNMM(std::string fname){
     len[1] = input.m_max[1] - input.m_min[1];
     len[2] = input.m_max[2] - input.m_min[2];
     len[3] = sqrt(len[0]*len[0]+len[1]*len[1]+len[2]*len[2]);
-    newinputnmm.diameter = len[3];
+    //newinputnmm.diameter = len[3];
     slab_mesh.bound_weight = 0.1;
 
-    for(unsigned i = 0; i < input.pVertexList.size(); i ++)
-        newinputnmm.BoundaryPoints.push_back(SamplePoint(
-                                                 input.pVertexList[i]->point()[0],
-                                             input.pVertexList[i]->point()[1],
-                input.pVertexList[i]->point()[2]
-                ));
+//    for(unsigned i = 0; i < input.pVertexList.size(); i ++)
+//        newinputnmm.BoundaryPoints.push_back(SamplePoint(
+//                                                 input.pVertexList[i]->point()[0],
+//                                             input.pVertexList[i]->point()[1],
+//                input.pVertexList[i]->point()[2]
+//                ));
 
     for(unsigned i = 0; i < nv; i ++)
     {
@@ -335,7 +335,20 @@ void ThreeDimensionalShape::LoadInputNMM(std::string fname){
         slab_mesh.faces.push_back(bsfp2);
         slab_mesh.numFaces++;
     }
-
+    std::string bplist;
+    mastream>>bplist;
+    if(bplist.rfind("#bplist", 0)==0){
+        for(unsigned i = 0; i < nv; i ++)
+        {
+            unsigned size;
+            mastream>>size;
+            unsigned tag;
+            for(unsigned k=0;k<size;k++){
+                mastream>>tag;
+                slab_mesh.vertices[i].second->bplist.emplace(tag);
+            }
+        }
+    }
     //newinputnmm.ComputeFacesNormal();
     //newinputnmm.ComputeFacesCentroid();
     //newinputnmm.ComputeFacesSimpleTriangles();
@@ -353,13 +366,13 @@ void ThreeDimensionalShape::LoadInputNMM(std::string fname){
     slab_mesh.ComputeVerticesNormal();//计算每个点的法向，关联面的法向平均值
     slab_mesh.ComputeEdgesCone();
     slab_mesh.ComputeFacesSimpleTriangles();
-    slab_mesh.DistinguishVertexType();
+    slab_mesh.DistinguishVertexType();//判断中轴点和中轴边的类型（边界、非流行）
 }
-long ThreeDimensionalShape::LoadSlabMesh()
+long ThreeDimensionalShape::PrepareSimplifySlabMesh()
 {
     slab_mesh.clear();
     long startt = clock();
-    InitialSlabMesh();
+    InitialSlabMesh();//计算cost需要的矩阵
     slab_mesh.initCollapseQueue();//计算所有边的cost
     long endt = clock();
     return endt - startt;
@@ -389,20 +402,20 @@ void ThreeDimensionalShape::InitialSlabMesh()
 
             // compute the matrix of A
             Matrix4d temp_A1, temp_A2;
-            temp_A1.MakeTensorProduct(normal1, normal1);//temp_A1=(n_1,1)^T x (n_1,1)
-            temp_A2.MakeTensorProduct(normal2, normal2);//temp_A2=(n_2,1)^T x (n_2,1)
-            temp_A1 *= 2.0;//temp_A1=2*(n_1,1)^T x (n_2,1)
-            temp_A2 *= 2.0;//temp_A2=2*(n_2,1)^T x (n_1,1)
+            temp_A1.MakeTensorProduct(normal1, normal1);//temp_A1=(n_1,1) * (n_1,1)^T
+            temp_A2.MakeTensorProduct(normal2, normal2);//temp_A2=(n_2,1) * (n_2,1)^T
+            temp_A1 *= 2.0;//temp_A1=2*(n_1,1) * (n_1,1)^T
+            temp_A2 *= 2.0;//temp_A2=2*(n_2,1) * (n_2,1)^T
 
             // compute the matrix of b
-            double normal_mul_point1 = normal1.Dot(C1);
-            double normal_mul_point2 = normal2.Dot(C1);
-            Wm4::Vector4d temp_b1 = normal1 * 2 * normal_mul_point1;
-            Wm4::Vector4d temp_b2 = normal2 * 2 * normal_mul_point2;
+            double normal_mul_point1 = normal1.Dot(C1);//(n_1,1)^T*m
+            double normal_mul_point2 = normal2.Dot(C1);//(n_2,1)^T*m
+            Wm4::Vector4d temp_b1 = normal1 * 2 * normal_mul_point1;//2*(n_1,1)*(n_1,1)^T*m
+            Wm4::Vector4d temp_b2 = normal2 * 2 * normal_mul_point2;//2*(n_2,1)*(n_2,1)^T*m
 
             //compute c
-            double temp_c1 = normal_mul_point1 * normal_mul_point1;
-            double temp_c2 = normal_mul_point2 * normal_mul_point2;
+            double temp_c1 = normal_mul_point1 * normal_mul_point1;//m^T*(n_1,1)*(n_1,1)^T*m
+            double temp_c2 = normal_mul_point2 * normal_mul_point2;//m^T*(n_2,1)*(n_2,1)^T*m
 
             slab_mesh.vertices[i].second->slab_A += temp_A1;
             slab_mesh.vertices[i].second->slab_A += temp_A2;
@@ -415,7 +428,7 @@ void ThreeDimensionalShape::InitialSlabMesh()
         }
     }
 
-    switch(slab_mesh.preserve_boundary_method)
+    switch(slab_mesh.preserve_boundary_method)//default 0
     {
     case 1 :
         slab_mesh.PreservBoundaryMethodOne();

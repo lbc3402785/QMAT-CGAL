@@ -15,7 +15,7 @@ public:
 	Vector3d v[3];
 	Vector3d normal;
 	bool ProjectOntoSimpleTriangle(const Vector3d & p, Vector3d & fp, double & dist);
-	void UpdateNormal(bool reverse = false);
+    void UpdateNormal();
 };
 
 class Sphere
@@ -43,20 +43,22 @@ public:
 class Cone
 {
 public:
-	Vector3d apex;
-	Vector3d axis;
-	double base;
-	double top;
-	double height;
-
+    Vector3d apex;
+    Vector3d smallCenter;//小圆圆心
+    Vector3d axis;//小圆指向大圆的方向向量
+    double base;//小圆半径
+    double top;//大圆半径
+    double height;//小圆到大圆距离
+    double hmin;
+    double hmax;
 	// 1 -- height = 0.0;
 	// 2 -- cylinder
 	// 3 -- general regular cone
 	int type;
 
 	// the rotation axis to rotate the axis to z-axis
-	Vector3d rot_axis;
-	double rot_angle;
+    Vector3d rot_axis;//axis.cross(0,0,1)
+    double rot_angle;//acos(axis.Dot(0,0,1)) 角度表示法
 public:
 	Cone(){}
 	Cone(Wm4::Vector3d c0, double r0, Wm4::Vector3d c1, double r1);

@@ -718,6 +718,16 @@ void NonManifoldMesh::Export(std::string fname) {
 			fout << " " << *si;
 		fout << std::endl;
 	}
+    //add by me
+    fout <<"#bplist"<< std::endl;
+    for (unsigned i = 0; i < vertices.size(); i++){
+        fout << vertices[i].second->bplist.size();
+        set<unsigned>::iterator itr;
+        for(itr=vertices[i].second->bplist.begin();itr!=vertices[i].second->bplist.end();itr++){
+            fout << " "<<*itr;
+        }
+        fout << std::endl;
+    }
 	/*
 	for(boost::tie(gvi,gvi_end) = vertices(*g); gvi != gvi_end; gvi ++)
 		fout << "v "<< (*g)[*gvi].pos[0] << ' ' << (*g)[*gvi].pos[1] << ' ' << (*g)[*gvi].pos[2] << ' ' << (*g)[*gvi].radius << std::endl;
@@ -727,17 +737,7 @@ void NonManifoldMesh::Export(std::string fname) {
 		fout << "f " << MappingIdtoGVD(g,g->tris[i].vid[0]) << ' ' << MappingIdtoGVD(g,g->tris[i].vid[1]) << ' ' << MappingIdtoGVD(g,g->tris[i].vid[2]) << std::endl;
 	*/
 	fout.close();
-    std::string mapname = fname;
-    mapname += ".map";
-    std::ofstream fmapout(mapname);
-    fmapout << numVertices<< std::endl;
-    for (unsigned i = 0; i < vertices.size(); i++){
-        fmapout << "bplist";
-        set<unsigned>::iterator itr;
-        for(itr=vertices[i].second->bplist.begin();itr!=vertices[i].second->bplist.end();itr++){
-            fmapout << " "<<*itr;
-        }
-        fmapout << std::endl;
-    }
-    fmapout.close();
+
+
+
 }

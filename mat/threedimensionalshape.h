@@ -13,7 +13,7 @@ public:
     // load the user simplified ma
     void LoadInputNMM(std::string fname);
 
-    long LoadSlabMesh();
+    long PrepareSimplifySlabMesh();
 
     // initial the matrix of each face and vertex for slab mesh
     void InitialSlabMesh();

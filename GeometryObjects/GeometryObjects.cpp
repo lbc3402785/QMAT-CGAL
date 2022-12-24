@@ -5,13 +5,9 @@ bool SimpleTriangle::ProjectOntoSimpleTriangle(const Vector3d & p, Vector3d & fp
 	return ProjectOntoTriangle(p,v[0],v[1],v[2],fp,dist);
 }
 
-void SimpleTriangle::UpdateNormal(bool reverse)
+void SimpleTriangle::UpdateNormal()
 {
 	normal = TriangleNormal(v[0],v[1],v[2]);
-	if (reverse)
-	{
-		normal = normal * -1;
-	}
 }
 
 void Sphere::ProjectOntoSphere(const Vector3d & p, Vector3d & fp, double & signeddist)
@@ -36,7 +32,7 @@ Cone::Cone(Wm4::Vector3d c0, double r0, Wm4::Vector3d c1, double r1)
 	// one sphere is included in another sphere
     if (c02c1.Length() - abs(r1 - r0) < 1e-8)
 	{
-		apex = r1 > r0 ? c1 : c0;
+        apex=smallCenter = r1 > r0 ? c1 : c0;
 		axis = Vector3d(0,0,1);
 		base = r1 > r0 ? r1 : r0;
 		top = r1 > r0 ? r1 : r0;
@@ -49,7 +45,7 @@ Cone::Cone(Wm4::Vector3d c0, double r0, Wm4::Vector3d c1, double r1)
 
     if(c02c1.Length() < 1e-8)
 	{
-		apex = c0;
+        apex=smallCenter = c0;
 		axis = Vector3d(0,0,1);
 		base = r0;
 		top = r0;
@@ -63,7 +59,7 @@ Cone::Cone(Wm4::Vector3d c0, double r0, Wm4::Vector3d c1, double r1)
 		double dr0r1 = fabs(r0-r1);
 		if(dr0r1 < 1e-8)
 		{
-			apex = c0;
+            smallCenter = c0;
 			axis = c1-c0;
 			axis.Normalize();
 			base = r0;
@@ -73,32 +69,37 @@ Cone::Cone(Wm4::Vector3d c0, double r0, Wm4::Vector3d c1, double r1)
 		}
 		else
 		{
-			apex = (r1 * c0 - r0 * c1) / (r1 - r0);
+//            smallCenter = (r1 * c0 - r0 * c1) / (r1 - r0);
+            apex=(r1 * c0 - r0 * c1) / (r1 - r0);
 			axis = (r0<r1)?(c1-c0):(c0-c1);
 			axis.Normalize();
 
 			double cangle;
-			Vector3d apexc0 = c0 - apex;
+            Vector3d apexc0 = c0 - apex;
 			double vc0len = apexc0.Length();
-			Vector3d apexc1 = c1 - apex;
+            Vector3d apexc1 = c1 - apex;
 			double vc1len = apexc1.Length();
             cangle = sqrt(1.-r0*r0/vc0len/vc0len);//\cos{\phi/2}
 
 			if(r0 < r1)
 			{
 				//cangle = sqrt(1.-r1*r1/vc1len/vc1len);
-                apex = apex + apexc0 * cangle * cangle;//small center
+                smallCenter = apex + apexc0 * cangle * cangle;//small center
                 base = r0 * cangle;//small radius
                 top = r1 * cangle;//bigger radius
 				height = (vc1len - vc0len) * cangle * cangle;
+                hmin=(smallCenter-apex).Dot(axis);
+                hmax=hmin+height;
 			}
 			else
 			{
 				//cangle = sqrt(1.-r0*r0/vc0len/vc0len);
-				apex = apex + apexc1 * cangle * cangle;
+                smallCenter = apex + apexc1 * cangle * cangle;
 				base = r1 * cangle;
 				top = r0 * cangle;
 				height = (vc0len - vc1len) * cangle * cangle;
+                hmin=(smallCenter-apex).Dot(axis);
+                hmax=hmin+height;
 			}
 			type = 3;
 		}
@@ -117,8 +118,8 @@ Cone::Cone(Wm4::Vector3d c0, double r0, Wm4::Vector3d c1, double r1)
 bool Cone::ProjectOntoCone(const Vector3d & p, Vector3d & fp, double & signeddist)
 {
 	Vector3d apexp;
-	apexp = p - apex;
-	Vector3d apexpCaxis = apexp.Cross(axis);
+    apexp = p - smallCenter;//小圆圆心指向顶点
+    Vector3d apexpCaxis = apexp.Cross(axis);//顶点和圆锥轴构成的面的法向量
 
 	Wm4::Vector3d v0,v1;
 	// on the axis
@@ -128,10 +129,10 @@ bool Cone::ProjectOntoCone(const Vector3d & p, Vector3d & fp, double & signeddis
 		bw = axis;
 		bw.GenerateComplementBasis(bu,bv,bw);
 
-		v0 = apex + bv * base;
-		v1 = apex + axis * height + bv * top;
+        v0 = smallCenter + bv * base;//小圆和bv轴的交点
+        v1 = smallCenter + axis * height + bv * top;//大圆和bv轴的交点
 		double dist;
-		bool res = ProjectOntoLineSegment(p,v0,v1,fp,dist);
+        bool res = ProjectOntoLineSegment(p,v0,v1,fp,dist);//顶点在线段上的投影
 		signeddist = res?-dist:dist;
 		return res;
 	}
@@ -142,19 +143,19 @@ bool Cone::ProjectOntoCone(const Vector3d & p, Vector3d & fp, double & signeddis
 		if( (dp < 0) || (dp > height) ) 
 			interior = false;
 		else
-		{
+        {//顶点在圆锥轴的投影在圆锥内部
 			double cone_dist_to_axis = dp/height * top + (height-dp)/height * base;
 			double dist_to_axis;
 			Vector3d tfp;
-			ProjectOntoLineSegment(p,apex,apex+axis*height,tfp,dist_to_axis);
+            ProjectOntoLineSegment(p,smallCenter,smallCenter+axis*height,tfp,dist_to_axis);
 			if(dist_to_axis > cone_dist_to_axis)
 				interior = false;
 		}
 		apexp = apexp - apexp.Dot(axis)*axis;
 		apexp.Normalize();
 
-		v0 = apex + apexp * base;
-		v1 = apex + axis * height + apexp * top;
+        v0 = smallCenter + apexp * base;
+        v1 = smallCenter + axis * height + apexp * top;
 		double dist;
 		bool res = ProjectOntoLineSegment(p,v0,v1,fp,dist);
 		if(interior)
@@ -168,8 +169,8 @@ bool Cone::ProjectOntoCone(const Vector3d & p, Vector3d & fp, double & signeddis
 Sphere Cone::BoundingSphere()
 {
 	Vector3d ep[2];
-	ep[0] = apex;
-	ep[1] = apex + axis * height;
+    ep[0] = smallCenter;
+    ep[1] = smallCenter + axis * height;
 	double rad;
 	rad = 0.5*(height + base + top);
 	Sphere s;
@@ -183,8 +184,8 @@ std::vector< Sphere > Cone::SampleSpheres( unsigned num)
 	std::vector< Sphere > vs;
 
 	Sphere s[2];
-	s[0].center = apex;
-	s[1].center = apex + axis * height;
+    s[0].center = smallCenter;
+    s[1].center = smallCenter + axis * height;
 	s[0].radius = base;
 	s[1].radius = top;
 
@@ -1015,7 +1016,8 @@ bool DistanceToLine(const Vector3d & p, const Vector3d & v0, const Vector3d & v1
 	if(v0v1.Length() > 1e-12)
 	{
 		dist = area / v0v1.Length();
-		double t = (pv0.Dot(pv0)-pv0.Dot(pv1)) / (pv0.Dot(pv0)+pv1.Dot(pv1)-2*pv0.Dot(pv1));
+//		double t = (pv0.Dot(pv0)-pv0.Dot(pv1)) / (pv0.Dot(pv0)+pv1.Dot(pv1)-2*pv0.Dot(pv1));
+        double t = (pv0.Dot(pv0)-pv0.Dot(pv1)) / (v0v1.Dot(v0v1));
 		fp = (1-t)*v0+t*v1;
 		return true;
 	}
@@ -1024,95 +1026,118 @@ bool DistanceToLine(const Vector3d & p, const Vector3d & v0, const Vector3d & v1
 }
 
 bool TriangleFromThreeSpheres(const Vector3d & c0,
-							  const double & r0,
-							  const Vector3d & c1,
-							  const double & r1,
-							  const Vector3d & c2,
-							  const double & r2,
-							  SimpleTriangle & st0,
-							  SimpleTriangle & st1)
+                              const double & r0,
+                              const Vector3d & c1,
+                              const double & r1,
+                              const Vector3d & c2,
+                              const double & r2,
+                              SimpleTriangle & st0,
+                              SimpleTriangle & st1)
 {
-	Vector3d c0c1(c1-c0),c0c2(c2-c0),c1c2(c2-c1);
-	double c0c1len(c0c1.Length()),c0c2len(c0c2.Length()),c1c2len(c1c2.Length());
-	double dr0r1(fabs(r0-r1)),dr0r2(fabs(r0-r2)),dr1r2(fabs(r1-r2));
+    Vector3d c0c1(c1-c0),c0c2(c2-c0),c1c2(c2-c1);
+    double c0c1len(c0c1.Length()),c0c2len(c0c2.Length()),c1c2len(c1c2.Length());
+    double dr0r1(fabs(r0-r1)),dr0r2(fabs(r0-r2)),dr1r2(fabs(r1-r2));
 
-	// some spheres are concentric and there are no triangles.
-	if( (c0c1len < 1e-8) || (c0c2len < 1e-8) || (c1c2len < 1e-8) )
-		return false;
+    // some spheres are concentric and there are no triangles.
+    if( (c0c1len < 1e-8) || (c0c2len < 1e-8) || (c1c2len < 1e-8) )
+        return false;
 
-	//// some spheres are included in some other spheres 
-	//if ((c0c1len - abs(r0 - r1) < 1e-8) || (c0c2len - abs(r0 - r2) < 1e-8) || (c1c2len - abs(r1 - r2) < 1e-8))
-	//	return false;
+    //// some spheres are included in some other spheres
+    //if ((c0c1len - abs(r0 - r1) < 1e-8) || (c0c2len - abs(r0 - r2) < 1e-8) || (c1c2len - abs(r1 - r2) < 1e-8))
+    //	return false;
 
-	Vector3d norm;
-	norm = c0c1.Cross(c0c2);
-	norm.Normalize();
+    Vector3d norm;
+    norm = c0c1.Cross(c0c2);
+    norm.Normalize();
 
-	// equal-radius spheres
-	if( (dr0r1 < 1e-8) && (dr0r2 < 1e-8) && (dr1r2 < 1e-8) )
-	{
-		st0.v[0] = c0 + norm * r0;
-		st0.v[1] = c1 + norm * r1;
-		st0.v[2] = c2 + norm * r2;
-		st0.UpdateNormal();
+    // equal-radius spheres
+    if( (dr0r1 < 1e-8) && (dr0r2 < 1e-8) && (dr1r2 < 1e-8) )
+    {
+        st0.v[0] = c0 + norm * r0;
+        st0.v[1] = c1 + norm * r1;
+        st0.v[2] = c2 + norm * r2;
+        st0.UpdateNormal();
+        if(st0.normal.Dot(norm)<0){
+            st0.v[0] = c0 + norm * r0;
+            st0.v[2] = c1 + norm * r1;
+            st0.v[1] = c2 + norm * r2;
+            st0.normal*=-1;
+        }
+        st1.v[0] = c0 - norm * r0;
+        st1.v[1] = c1 - norm * r1;
+        st1.v[2] = c2 - norm * r2;
+        st1.UpdateNormal();
+        if(st1.normal.Dot(- norm)<0){
+            st1.v[0] = c0 - norm * r0;
+            st1.v[2] = c1 - norm * r1;
+            st1.v[1] = c2 - norm * r2;
+            st1.normal*=-1;
+        }
+        return true;
+    }
+    else
+    {
+        // two points on the tangent plane
+        Vector3d apex0,apex1;
 
-		st1.v[0] = c0 - norm * r0;
-		st1.v[1] = c1 - norm * r1;
-		st1.v[2] = c2 - norm * r2;
-		st1.UpdateNormal(true);
-		return true;
-	}
-	else 
-	{
-		// two points on the tangent plane
-		Vector3d apex0,apex1;
+        // two spheres are equal-radius
+        if(dr0r1 < 1e-8)
+        {
+            apex0 = (r2 * c0 - r0 * c2) / (r2 - r0);//apex0 for c0 and c2
+            apex1 = (r2 * c1 - r1 * c2) / (r2 - r1);//apex1 for c1 and c2
+        }
+        else if (dr0r2 < 1e-8)
+        {
+            apex0 = (r1 * c0 - r0 * c1) / (r1 - r0);//apex0 for c0 and c1
+            apex1 = (r2 * c1 - r1 * c2) / (r2 - r1);//apex1 for c1 and c2
+        }
+        else if (dr1r2 < 1e-8)
+        {
+            apex0 = (r2 * c0 - r0 * c2) / (r2 - r0);//apex0 for c0 and c2
+            apex1 = (r0 * c1 - r1 * c0) / (r0 - r1);//apex1 for c0 and c1
+        }
+        else
+        {
+            apex0 = (r2 * c0 - r0 * c2) / (r2 - r0);//apex0 for c0 and c2
+            apex1 = (r2 * c1 - r1 * c2) / (r2 - r1);//apex1 for c1 and c2
+        }
 
-		// two spheres are equal-radius
-		if(dr0r1 < 1e-8)
-		{
-			apex0 = (r2 * c0 - r0 * c2) / (r2 - r0);
-			apex1 = (r2 * c1 - r1 * c2) / (r2 - r1);
-		}
-		else if (dr0r2 < 1e-8)
-		{
-			apex0 = (r1 * c0 - r0 * c1) / (r1 - r0);
-			apex1 = (r2 * c1 - r1 * c2) / (r2 - r1);
-		}
-		else if (dr1r2 < 1e-8)
-		{
-			apex0 = (r2 * c0 - r0 * c2) / (r2 - r0);
-			apex1 = (r0 * c1 - r1 * c0) / (r0 - r1);
-		}
-		else
-		{
-			apex0 = (r2 * c0 - r0 * c2) / (r2 - r0);
-			apex1 = (r2 * c1 - r1 * c2) / (r2 - r1);
-		}
-
-		double distc0;
-		Vector3d fp;
-		DistanceToLine(c0,apex0,apex1,distc0,fp);
+        double distc0;
+        Vector3d fp;
+        DistanceToLine(c0,apex0,apex1,distc0,fp);
         double sangle = r0/distc0;//\cos{\angle{VCO}}
-		if(fabs(sangle) > 1.)
-			return false;
+        if(fabs(sangle) > 1.)
+            return false;
         double cangle = sqrt(1.-r0*r0/distc0/distc0);//\sin{\angle{VCO}}
-		Vector3d norfpc0(c0-fp);
-		norfpc0.Normalize();
-		Vector3d newnorm[2];
-		newnorm[0] = norm*cangle - norfpc0*sangle;
-		newnorm[1] = -norm*cangle - norfpc0*sangle;
-		st0.v[0] = c0 + r0*newnorm[0];
-		st0.v[1] = c1 + r1*newnorm[0];
-		st0.v[2] = c2 + r2*newnorm[0];
-		st0.UpdateNormal();
+        Vector3d norfpc0(c0-fp);
+        norfpc0.Normalize();
+        Vector3d newnorm[2];
+        newnorm[0] = norm*cangle - norfpc0*sangle;
+        newnorm[1] = -norm*cangle - norfpc0*sangle;
+        st0.v[0] = c0 + r0*newnorm[0];
+        st0.v[1] = c1 + r1*newnorm[0];
+        st0.v[2] = c2 + r2*newnorm[0];
+        st0.UpdateNormal();
+        if(st0.normal.Dot(newnorm[0])<0){
+            st0.v[0] = c0 + r0*newnorm[0];
+            st0.v[2] = c1 + r1*newnorm[0];
+            st0.v[1] = c2 + r2*newnorm[0];
+            st0.normal*=-1;
+        }
 
-		st1.v[0] = c0 + r0*newnorm[1];
-		st1.v[1] = c1 + r1*newnorm[1];
-		st1.v[2] = c2 + r2*newnorm[1];
-		st1.UpdateNormal(true);
-	}
+        st1.v[0] = c0 + r0*newnorm[1];
+        st1.v[1] = c1 + r1*newnorm[1];
+        st1.v[2] = c2 + r2*newnorm[1];
+        st1.UpdateNormal();
+        if(st1.normal.Dot(newnorm[1])<0){
+            st1.v[0] = c0 + r0*newnorm[1];
+            st1.v[2] = c1 + r1*newnorm[1];
+            st1.v[1] = c2 + r2*newnorm[1];
+            st1.normal*=-1;
+        }
+    }
 
-	return true;
+    return true;
 }
 
 Vector3d TriangleNormal(const Vector3d & v0, const Vector3d & v1, const Vector3d & v2)

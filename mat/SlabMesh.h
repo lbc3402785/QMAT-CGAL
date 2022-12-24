@@ -6,13 +6,13 @@
 class SlabPrim
 {
 public:
-	Wm4::Matrix4d slab_A;
+    Wm4::Matrix4d slab_A;//是论文矩阵的两倍，在计算cost时又乘以0.5
 	Wm4::Vector4d slab_b;
 	double slab_c;
 
-	Wm4::Matrix4d add_A;
-	Wm4::Vector4d add_b;
-	double add_c;
+    Wm4::Matrix4d add_A;//边界保护项或者中轴锥项
+    Wm4::Vector4d add_b;//边界保护项或者中轴锥项
+    double add_c;//边界保护项或者中轴锥项
 
 	// hyperbolic weight
 	double hyperbolic_weight;

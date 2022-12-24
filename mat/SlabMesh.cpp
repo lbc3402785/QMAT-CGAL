@@ -338,7 +338,7 @@ bool SlabMesh::MergeVertices(unsigned vid_src1, unsigned vid_src2, unsigned &vid
 	//if (vertices[vid_src1].second->boundary_vertex || vertices[vid_src2].second->boundary_vertex)
 	//	vertices[vid_tgt].second->boundary_vertex = true;
 
-	std::vector< std::set<unsigned> > tri_vec;
+    std::vector< std::set<unsigned> > tri_vec;//更新的面
 	for(std::set<unsigned>::iterator si = vertices[vid_src1].second->faces_.begin();
 		si != vertices[vid_src1].second->faces_.end(); si ++)
 		if(!faces[*si].second->HasVertex(vid_tgt))
@@ -359,7 +359,7 @@ bool SlabMesh::MergeVertices(unsigned vid_src1, unsigned vid_src2, unsigned &vid
 				tri_vec.push_back(vset);
 			}
 
-			std::vector< std::pair<unsigned,unsigned> > edge_vec;
+            std::vector< std::pair<unsigned,unsigned> > edge_vec;//更新的边
 			for(std::set<unsigned>::iterator si = vertices[vid_src1].second->edges_.begin();
 				si != vertices[vid_src1].second->edges_.end(); si ++)
 				if(!edges[*si].second->HasVertex(vid_tgt))
@@ -373,7 +373,7 @@ bool SlabMesh::MergeVertices(unsigned vid_src1, unsigned vid_src2, unsigned &vid
 				}
 
 				for(std::set<unsigned>::iterator si = vertices[vid_src2].second->edges_.begin();
-					si != vertices[vid_src2].second->edges_.end(); si ++)
+                    si != vertices[vid_src2].second->edges_.end(); si ++){
 					if(!edges[*si].second->HasVertex(vid_tgt))
 					{
 						std::pair<unsigned, unsigned> vp = edges[*si].second->vertices_;
@@ -397,7 +397,7 @@ bool SlabMesh::MergeVertices(unsigned vid_src1, unsigned vid_src2, unsigned &vid
 					}
 
 					return true;
-
+                }
 }
 
 unsigned SlabMesh::VertexIncidentEdgeCount(unsigned vid)
@@ -698,7 +698,9 @@ void SlabMesh::ComputeFacesSimpleTriangles()
 		if(faces[i].first)
 			ComputeFaceSimpleTriangles(i);
 }
-
+/**
+ * @brief SlabMesh::DistinguishVertexType 检查边界边、点，检查非流行边、点
+ */
 void SlabMesh::DistinguishVertexType()
 {
 	for (unsigned i = 0; i != edges.size(); i++)
@@ -1034,7 +1036,7 @@ bool SlabMesh::MinCostBoundaryEdgeCollapse(unsigned & eid)
 		vertices[vid_tgt].second->sphere = sphere;
 		vertices[vid_tgt].second->related_face = temp_related_face;
 		vertices[vid_tgt].second->mean_square_error = temp_mean_squre_error;
-		vertices[vid_tgt].second->bplist = temp_bplist;
+        vertices[vid_tgt].second->bplist = temp_bplist;//关联的样本点
 
 		switch(boundary_compute_scale)
 		{
@@ -1100,11 +1102,11 @@ bool SlabMesh::MinCostBoundaryEdgeCollapse(unsigned & eid)
 				unsigned temp_ind = *it;
 				Vector3d bou_ver(pmesh->pVertexList[temp_ind]->point()[0], pmesh->pVertexList[temp_ind]->point()[1], pmesh->pVertexList[temp_ind]->point()[2]);
 
-				temp_sum_haus_dis -= pmesh->pVertexList[temp_ind]->slab_hausdorff_dist;
+                temp_sum_haus_dis -= pmesh->pVertexList[temp_ind]->slab_hausdorff_dist;//先减去旧的的数据
 
 				double min_dis = DBL_MAX;
 				unsigned min_index = -1;
-				for (unsigned j = 0; j < vertices.size(); j++)
+                for (unsigned j = 0; j < vertices.size(); j++)//到每个中轴求的距离
 				{
 					if (vertices[j].first)
 					{
@@ -1120,7 +1122,7 @@ bool SlabMesh::MinCostBoundaryEdgeCollapse(unsigned & eid)
 
 				if (min_index != -1)
 				{	
-					double temp_near_dis = NearestPoint(bou_ver, min_index);
+                    double temp_near_dis = NearestPoint(bou_ver, min_index);//到中轴球关联的面和中轴边的距离
 					min_dis = min(temp_near_dis, min_dis);
 
 					maxhausdorff_distance = max(maxhausdorff_distance, min_dis);
@@ -1370,7 +1372,10 @@ bool SlabMesh::MinCostEdgeCollapse(unsigned & eid){
 
 	return true;
 }
-
+/**
+ * @brief SlabMesh::EvaluateEdgeCollapseCost 计算中轴边的收缩cost
+ * @param eid
+ */
 void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 	if (!edges[eid].first)
 		return ;
@@ -1382,7 +1387,7 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 	double weight = vertices[v1].second->hyperbolic_weight + vertices[v2].second->hyperbolic_weight;
 
 	// set the hyperbolic weight to the related edge
-	switch(hyperbolic_weight_type)
+	switch(hyperbolic_weight_type)//default 3
 	{
 	case 1:
 		edges[eid].second->hyperbolic_weight = GetHyperbolicLength(eid);
@@ -1421,21 +1426,21 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 	edges[eid].second->slab_c = c1 + c2;
 
 	Matrix4d inverse_A_matrix = edges[eid].second->slab_A.Inverse();
-	Wm4::Vector4d lamdar;
+    Wm4::Vector4d lamdar;//收缩解
 	double coll_cost = 0.0;
 
 	if ((vertices[v1].second->saved_vertex && !vertices[v2].second->saved_vertex) ||
-		(vertices[v2].second->saved_vertex && !vertices[v1].second->saved_vertex))
+        (vertices[v2].second->saved_vertex && !vertices[v1].second->saved_vertex))//中轴边有一个点是收缩产生的新点
 	{
 		Sphere mid_sphere; 
 		if (vertices[v1].second->saved_vertex)
-			mid_sphere = vertices[v1].second->sphere;
+            mid_sphere = vertices[v1].second->sphere;//收缩产生的新点
 		else
 			mid_sphere = vertices[v2].second->sphere;
 
 		lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);
 	}	
-	else if ((vertices[v1].second->saved_vertex && vertices[v2].second->saved_vertex))
+    else if ((vertices[v1].second->saved_vertex && vertices[v2].second->saved_vertex))//中轴边两个点是收缩产生的新点
 	{
 		//edges[eid].second->collapse_cost = DBL_MAX;
 		//GetBestBoundaryPoint(eid);
@@ -1443,7 +1448,7 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 		Sphere min_sphere[3];
 		Vector4d min_vertex;
 		int min_index = 0;
-
+        //分别计算收缩到两个端点和中点的cost，找出cost最小的情况
 		min_sphere[0] = vertices[v1].second->sphere;
 		min_vertex = Vector4d(min_sphere[0].center.X(), min_sphere[0].center.Y(), min_sphere[0].center.Z(), min_sphere[0].radius);
 		collapse_costs[0] = 0.5 * (min_vertex * edges[eid].second->slab_A).Dot(min_vertex) 
@@ -1463,11 +1468,11 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 
 		edges[eid].second->collapse_cost = collapse_costs[min_index];
 		edges[eid].second->sphere.center = min_sphere[min_index].center;
-		edges[eid].second->sphere.radius = min_sphere[min_index].radius;
+        edges[eid].second->sphere.radius = min_sphere[min_index].radius;//cost计算完毕
 
 		return;
 	}
-	else
+    else//都是原始中轴点的情况
 	{
 		if (inverse_A_matrix != Matrix4d() || edges[eid].second->faces_.size() == 0)//矩阵可逆或者中轴锥的情况
 		{
@@ -1481,22 +1486,22 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 			inverse_A_matrix = edges[eid].second->slab_A.Inverse();
 			if (inverse_A_matrix != Matrix4d())//矩阵可逆
 			{
-				lamdar = inverse_A_matrix * edges[eid].second->slab_b;
+                lamdar = inverse_A_matrix * edges[eid].second->slab_b;//v=A^{-1}*b
 				if (lamdar.W() < 0)//解不对
 				{
 					Sphere mid_sphere = (vertices[v1].second->sphere + vertices[v2].second->sphere) * 0.5;
-					lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);
+                    lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);//使用中点作为收缩解
 				}
 			}
 			else
 			{
 				// it's now calculate as the middle of the spheres
 				Sphere mid_sphere = (vertices[v1].second->sphere + vertices[v2].second->sphere) * 0.5;
-				lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);
+                lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);//使用中点作为收缩解
 			}
 		}
 		else
-		{
+        {//矩阵不可逆并且不是中轴锥
 			//// it's now calculate as the middle of the spheres
 			//Sphere mid_sphere = (vertices[v1].second->sphere + vertices[v2].second->sphere) * 0.5;
 			//lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);
@@ -1537,7 +1542,7 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 			case 3:
 				//coll_cost = edges[eid].second->hyperbolic_weight;
 				edges[eid].second->qem_error = coll_cost;
-				coll_cost = (coll_cost + k) * edges[eid].second->hyperbolic_weight * edges[eid].second->hyperbolic_weight;
+                coll_cost = (coll_cost + k) * edges[eid].second->hyperbolic_weight * edges[eid].second->hyperbolic_weight;//(E+k)*\Tau_{ij}^{2}
 
 				//coll_cost = (coll_cost + k) * edges[eid].second->hyperbolic_weight * edges[eid].second->hyperbolic_weight 
 				//	* edges[eid].second->hyperbolic_weight	* edges[eid].second->hyperbolic_weight
@@ -1557,9 +1562,9 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 			return;
 		}
 	}
-
+    //中轴边有一个点是收缩产生的新点、都是原始中轴点并且矩阵可逆或者中轴锥的情况
 	coll_cost = 0.5 * (lamdar * edges[eid].second->slab_A).Dot(lamdar) 
-		- edges[eid].second->slab_b.Dot(lamdar) + edges[eid].second->slab_c;
+        - edges[eid].second->slab_b.Dot(lamdar) + edges[eid].second->slab_c;//使用收缩解计算cost,E=m^T*Am+b^T*m+c
 
 	// 当发生翻转时，选取没有引起翻转的方式进行合并
 	if (!Contractible(v1, v2, Wm4::Vector3d(lamdar.X(), lamdar.Y(), lamdar.Z())))//计算出来的收缩点会发生反转，考虑其他三种情况代价最小的收缩点。
@@ -1569,7 +1574,7 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 		Sphere *min_sphere = new Sphere[3];
 		Vector4d min_vertex;
 		int min_index = 0;
-		if (!Contractible(v1, v2, vertices[v1].second->sphere.center))
+        if (!Contractible(v1, v2, vertices[v1].second->sphere.center))//使用v1作为收缩点不会发生翻转
 		{
 			min_sphere[count] = vertices[v1].second->sphere;
 			min_vertex = Vector4d(min_sphere[count].center.X(), min_sphere[count].center.Y(), min_sphere[count].center.Z(), min_sphere[count].radius);
@@ -1577,7 +1582,7 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 				- edges[eid].second->slab_b.Dot(min_vertex) + edges[eid].second->slab_c;
 			count++;
 		}
-		if (!Contractible(v1, v2, vertices[v2].second->sphere.center))
+        if (!Contractible(v1, v2, vertices[v2].second->sphere.center))//使用v2作为收缩点不会发生翻转
 		{
 			min_sphere[count] = vertices[v2].second->sphere;
 			min_vertex = Vector4d(min_sphere[count].center.X(), min_sphere[count].center.Y(), min_sphere[count].center.Z(), min_sphere[count].radius);
@@ -1585,7 +1590,7 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 				- edges[eid].second->slab_b.Dot(min_vertex) + edges[eid].second->slab_c;
 			count++;
 		}
-		if (!Contractible(v1, v2, (vertices[v1].second->sphere.center + vertices[v2].second->sphere.center) / 2.0))
+        if (!Contractible(v1, v2, (vertices[v1].second->sphere.center + vertices[v2].second->sphere.center) / 2.0))//使用中点作为收缩点不会发生翻转
 		{
 			min_sphere[count] = (vertices[v1].second->sphere + vertices[v2].second->sphere) * 0.5;
 			min_vertex = Vector4d(min_sphere[count].center.X(), min_sphere[count].center.Y(), min_sphere[count].center.Z(), min_sphere[count].radius);
@@ -1636,7 +1641,7 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 		//coll_cost = coll_cost * edges[eid].second->hyperbolic_weight;
 		//coll_cost = edges[eid].second->hyperbolic_weight;
 		edges[eid].second->qem_error = coll_cost;
-		coll_cost = (coll_cost + k) * edges[eid].second->hyperbolic_weight * edges[eid].second->hyperbolic_weight;
+        coll_cost = (coll_cost + k) * edges[eid].second->hyperbolic_weight * edges[eid].second->hyperbolic_weight;//(E+k)*\Tau_{ij}^{2}
 
 		//coll_cost = (coll_cost + k) * edges[eid].second->hyperbolic_weight * edges[eid].second->hyperbolic_weight 
 		//	* edges[eid].second->hyperbolic_weight * edges[eid].second->hyperbolic_weight
@@ -1922,8 +1927,8 @@ void SlabMesh::Simplify(int threshold){
 					for (set<unsigned>::iterator si = fir_edges.begin(); si != fir_edges.end(); si++)
 					{
 						int index = edges[*si].second->vertices_.first == i ? 
-							edges[*si].second->vertices_.second : edges[*si].second->vertices_.first;
-
+                            edges[*si].second->vertices_.second : edges[*si].second->vertices_.first;//边的另一个端点
+                        //index这个点只关联一条边并且没有关联面
 						if (vertices[index].second->edges_.size() == 1 && vertices[index].second->faces_.size() == 0)
 						{
                             edges[*si].second->topo_contractable = false;//数量较少时，留下来的分支可能是骨骼部分，不要收缩
@@ -1977,7 +1982,7 @@ void SlabMesh::initCollapseQueue(){
 	{ 
 		if (edges[i].first)
 		{
-			EvaluateEdgeCollapseCost(i);
+            EvaluateEdgeCollapseCost(i);//计算中轴边的收缩cost
 			edge_collapses_queue.push(EdgeInfo(i, edges[i].second->collapse_cost));
 		}
 	}
@@ -2491,11 +2496,11 @@ void SlabMesh::PreservBoundaryMethodFour()
 			ver[0]= vertices[ver_index[0]].second->sphere;
 			ver[1] = vertices[ver_index[1]].second->sphere;
 
-			Vector3d v1v2 = vertices[ver_index[0]].second->sphere.center - vertices[ver_index[1]].second->sphere.center;
-			Vector3d v1v3 = vertices[ver_index[2]].second->sphere.center - vertices[ver_index[0]].second->sphere.center;
-			Vector3d temp_nor = face_normal.Cross(v1v2);
+            Vector3d v1v0 = vertices[ver_index[0]].second->sphere.center - vertices[ver_index[1]].second->sphere.center;
+            Vector3d v0v2 = vertices[ver_index[2]].second->sphere.center - vertices[ver_index[0]].second->sphere.center;
+            Vector3d temp_nor = face_normal.Cross(v1v0);//v1v0是边界边，目的是计算一个超向边界外面的法向
 
-			double temp_angle = acos(temp_nor.Dot(v1v3) / temp_nor.Length() / v1v3.Length());
+            double temp_angle = acos(temp_nor.Dot(v0v2) / temp_nor.Length() / v0v2.Length());
 			bool dir = temp_angle > Wm4::Math<double>::PI / 2.0 ? true : false;
 
 			if (dir == false)
@@ -2506,7 +2511,7 @@ void SlabMesh::PreservBoundaryMethodFour()
 			// compute the matrix of A
 			Matrix4d temp_A1;
 			temp_A1.MakeTensorProduct(normal1, normal1);
-			temp_A1 *= 2.0;
+            temp_A1 *= 2.0;//2*(n,1)*(n,1)^T
 
 			// 对不同ratio的边进行映射处理，小于0.2的不做处理，(0.2,1)映射到(2, 10)
 			double ratio = GetRatioHyperbolicEuclid(i);
@@ -2526,16 +2531,16 @@ void SlabMesh::PreservBoundaryMethodFour()
 
 				// compute the matrix of b
 				double normal_mul_point1 = normal1.Dot(C1);
-				Wm4::Vector4d temp_b1 = normal1 * 2 * normal_mul_point1;
+                Wm4::Vector4d temp_b1 = normal1 * 2 * normal_mul_point1;//2*(n,1)*(n,1)^T*m
 
 				//compute c
-				double temp_c1 = normal_mul_point1 * normal_mul_point1;
+                double temp_c1 = normal_mul_point1 * normal_mul_point1;//m^T*(n,1)*(n,1)^T*m
 
 				vertices[ver_index[i]].second->add_A += temp_A1 * bound_weight * w1;
 				vertices[ver_index[i]].second->add_b += temp_b1 * bound_weight * w1;
 				vertices[ver_index[i]].second->add_c += temp_c1 * bound_weight * w1;
 			}
-        }else if (edges[i].second->faces_.size() == 0)//没有关联中轴夹板，计算到中轴锥的误差
+        }else if (edges[i].second->faces_.size() == 0)//没有关联中轴夹板，计算到中轴锥的误差，没有关联中轴夹板不存在重复计算，因为前面计算是通过遍历关联的中轴夹板
 		{
 			unsigned ver_index[2];
 			ver_index[0] = se.vertices_.first;
@@ -2543,7 +2548,7 @@ void SlabMesh::PreservBoundaryMethodFour()
 			Sphere ver[3];
 			ver[0]= vertices[ver_index[0]].second->sphere;
 			ver[1] = vertices[ver_index[1]].second->sphere;
-			ver[2].center = (ver[0].center + ver[1].center);
+            ver[2].center = (ver[0].center + ver[1].center);//相当于(ver[0].center + ver[1].center)/2在平面上是移动
 			ver[2].radius = (ver[0].radius + ver[1].radius) / 2.0;
 
 			SimpleTriangle st[2];
@@ -2618,14 +2623,14 @@ void SlabMesh::PreservBoundaryMethodFour()
 				}
 			}
 
-			double ratio = GetRatioHyperbolicEuclid(i);
-			double w1 = 1.0;
+            double ratio = GetRatioHyperbolicEuclid(i);//计算这条边的稳定性系数
+            double w1 = 1.0;//k'
 			//w1 = 0.02 * ratio * ratio * ratio * ratio * ratio * ratio;
 			w1 = 0.1 * ratio * ratio;
 			//w1 = 1 * ratio * ratio * ratio * ratio * ratio * ratio;
 			//w1 = 1 * ratio * ratio * ratio;
 			// 对于暴露出来的点再加一个保护平面
-			if (vertices[ver_index[0]].second->edges_.size() == 1)
+            if (vertices[ver_index[0]].second->edges_.size() == 1)//只关联一条边的中轴点是分叉末端
 			{
 
 				Vector3d ver1_to_ver2 = ver[0].center - ver[1].center;
@@ -2643,11 +2648,11 @@ void SlabMesh::PreservBoundaryMethodFour()
 				//vertices[ver_index[0]].second->add_A += (temp_A1 * 100.0);
 				//vertices[ver_index[0]].second->add_b += (temp_b1 * 100.0);
 				//vertices[ver_index[0]].second->add_c += (temp_c1 * 100.0);
-				vertices[ver_index[0]].second->add_A += temp_A1 * bound_weight * w1;
+                vertices[ver_index[0]].second->add_A += temp_A1 * bound_weight * w1;//k'*\tau_{ij}^2
 				vertices[ver_index[0]].second->add_b += temp_b1 * bound_weight * w1;
 				vertices[ver_index[0]].second->add_c += temp_c1 * bound_weight * w1;
 			}
-			if (vertices[ver_index[1]].second->edges_.size() == 1)
+            if (vertices[ver_index[1]].second->edges_.size() == 1)//只关联一条边的中轴点是分叉末端
 			{
 				Vector3d ver2_to_ver1 = ver[1].center - ver[0].center;
 				Vector4d normal1(ver2_to_ver1.X(), ver2_to_ver1.Y(), ver2_to_ver1.Z(), 1.0);
@@ -2664,7 +2669,7 @@ void SlabMesh::PreservBoundaryMethodFour()
 				//vertices[ver_index[1]].second->add_A += (temp_A1 * 100.0);
 				//vertices[ver_index[1]].second->add_b += (temp_b1 * 100.0);
 				//vertices[ver_index[1]].second->add_c += (temp_c1 * 100.0);
-				vertices[ver_index[1]].second->add_A += temp_A1 * bound_weight * w1;
+                vertices[ver_index[1]].second->add_A += temp_A1 * bound_weight * w1;//k'*\tau_{ij}^2
 				vertices[ver_index[1]].second->add_b += temp_b1 * bound_weight * w1;
 				vertices[ver_index[1]].second->add_c += temp_c1 * bound_weight * w1;
 			}
@@ -2864,7 +2869,11 @@ double SlabMesh::GetHyperbolicLength(unsigned eid)
 	hyperbolic_weight = max(hyperbolic_weight, 0.0); 
 	return hyperbolic_weight;
 }
-
+/**
+ * @brief SlabMesh::GetRatioHyperbolicEuclid 计算边的稳定性系数
+ * @param eid
+ * @return
+ */
 double SlabMesh::GetRatioHyperbolicEuclid(unsigned eid)
 {
 	double hyperbolic_distance;
@@ -2877,12 +2886,12 @@ double SlabMesh::GetRatioHyperbolicEuclid(unsigned eid)
 		hyperbolic_distance = edge_length - (r2 - r1);
 	else
 		hyperbolic_distance = edge_length - (r1 - r2);
-	hyperbolic_distance = max(hyperbolic_distance, 0.0); 
+    hyperbolic_distance = max(hyperbolic_distance, 0.0);//d_{h}(mi,mj)
 
-	if (edge_length == 0.0)
+    if (edge_length == 0.0)//重合的中轴球应该优先收缩，让稳定性系数为0，误差减小优先收缩
 		return 0.0;
 
-	return hyperbolic_distance / edge_length;
+    return hyperbolic_distance / edge_length;//d_{h}(mi,mj)/||ci-cj||
 }
 
 void SlabMesh::ExportSimplifyResult()
@@ -2928,10 +2937,35 @@ void SlabMesh::Export(std::string fname){
 			fout << " " << *si;
 		fout << std::endl;
 	}
+    //add by me
+    fout <<"#bplist"<< std::endl;
+    for (unsigned i = 0; i < vertices.size(); i++){
+        fout << vertices[i].second->bplist.size();
+        set<unsigned>::iterator itr;
+        for(itr=vertices[i].second->bplist.begin();itr!=vertices[i].second->bplist.end();itr++){
+            fout << " "<<*itr;
+        }
+        fout << std::endl;
+    }
 	fout.close();
 }
 
-
+/**
+ * @brief SlabMesh::InitialTopologyProperty 检查某个点关联的所有边找出管状区域并且把洞关联的所有边标记为不可以收缩边
+ * @param vid
+ *       vid---------si---------index
+ *         \                    /
+ *          \                  /
+ *           \                /
+ *            \              /
+ *            si3          si2
+ *              \          /
+ *               \        /
+ *                \      /
+ *                 \    /
+ *                  \  /
+ *                  index2
+ */
 void SlabMesh::InitialTopologyProperty(unsigned vid) {
 	if (numVertices > 100)
 		return;
@@ -2941,17 +2975,17 @@ void SlabMesh::InitialTopologyProperty(unsigned vid) {
 	for (set<unsigned>::iterator si = fir_edges.begin(); si != fir_edges.end(); si++)
 	{
 		int index = edges[*si].second->vertices_.first == vid ? 
-			edges[*si].second->vertices_.second : edges[*si].second->vertices_.first;
+            edges[*si].second->vertices_.second : edges[*si].second->vertices_.first;//边的另一个端点序号
 
-		set<unsigned> sec_edges = vertices[index].second->edges_;
-		sec_edges.erase(*si);
+        set<unsigned> sec_edges = vertices[index].second->edges_;//另一个端点关联的所有边
+        sec_edges.erase(*si);//删除vid--index这条边
 		for (set<unsigned>::iterator si2 = sec_edges.begin(); si2 != sec_edges.end(); si2++)
 		{
 			int index2 = edges[*si2].second->vertices_.first == index ? 
 				edges[*si2].second->vertices_.second : edges[*si2].second->vertices_.first;
 
 			set<unsigned> third_edges = vertices[index2].second->edges_;
-			third_edges.erase(*si2);
+            third_edges.erase(*si2);//删除index--index2这条边
 			for (set<unsigned>::iterator si3 = third_edges.begin(); si3 != third_edges.end(); si3++)
 			{
 				int index3 = edges[*si3].second->vertices_.first == index2 ? 
@@ -2974,9 +3008,9 @@ void SlabMesh::InitialTopologyProperty(unsigned vid) {
                     if (is_hole)//有洞可能是管状部分，不要破坏
 					{
 						if (edges[*si].second->faces_.size() <= 1 && edges[*si2].second->faces_.size() <= 1 
-							&& edges[*si3].second->faces_.size() <= 1)
+                            && edges[*si3].second->faces_.size() <= 1)//洞的三条边关联的面数小于等于1,说明这个区域估计是管状部分
 						{
-							edges[*si].second->topo_contractable = false;
+                            edges[*si].second->topo_contractable = false;//标志为不可以收缩的边
 							edges[*si2].second->topo_contractable = false;
 							edges[*si3].second->topo_contractable = false; 
 						}
