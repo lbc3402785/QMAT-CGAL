@@ -3,97 +3,129 @@
 
 void SlabMesh::AdjustStorage()
 {
-	std::vector<unsigned> newv;
-	std::vector<unsigned> newe;
-	std::vector<unsigned> newf;
+    std::vector<unsigned> newv;
+    std::vector<unsigned> newe;
+    std::vector<unsigned> newf;
 
-	newv.resize(vertices.size());
-	newe.resize(edges.size());
-	newf.resize(faces.size());
+    newv.resize(vertices.size());
+    newe.resize(edges.size());
+    newf.resize(faces.size());
 
-	unsigned count = 0;
-	for(unsigned i = 0; i < vertices.size(); i ++)
-		if(vertices[i].first)
-			newv[i] = count ++;
+    unsigned count = 0;
+    for(unsigned i = 0; i < vertices.size(); i ++){
+        if(vertices[i].first){
+            newv[i] = count ++;
+        }else{
+            newv[i] =-1;
+        }
+    }
 
-	count = 0;
-	for(unsigned i = 0; i < edges.size(); i ++)
-		if(edges[i].first)
-			newe[i] = count ++;
+    count = 0;
+    for(unsigned i = 0; i < edges.size(); i ++){
+        if(edges[i].first){
+            newe[i] = count ++;
+        }else{
+            newe[i] =-1;
+        }
+    }
 
-	count = 0;
-	for(unsigned i = 0; i < faces.size(); i ++)
-		if(faces[i].first)
-			newf[i] = count ++;
+    count = 0;
+    for(unsigned i = 0; i < faces.size(); i ++){
+        if(faces[i].first){
+            newf[i] = count ++;
+        }else{
+            newf[i]=-1;
+        }
+    }
 
-	std::vector<Bool_SlabVertexPointer> new_vertices;
-	std::vector<Bool_SlabEdgePointer> new_edges;
-	std::vector<Bool_SlabFacePointer> new_faces;
+    std::vector<Bool_SlabVertexPointer> new_vertices;
+    std::vector<Bool_SlabEdgePointer> new_edges;
+    std::vector<Bool_SlabFacePointer> new_faces;
 
-	for(unsigned i = 0; i < vertices.size(); i ++)
-		if(vertices[i].first)
-		{
-			Bool_SlabVertexPointer bvp;
-			bvp = vertices[i];
-			std::set<unsigned> neweset;
-			std::set<unsigned> newfset;
+    for(unsigned i = 0; i < vertices.size(); i ++){
+        if(vertices[i].first)
+        {
+            Bool_SlabVertexPointer bvp;
+            bvp = vertices[i];
+            std::set<unsigned> neweset;
+            std::set<unsigned> newfset;
 
-			for(std::set<unsigned>::iterator si = bvp.second->edges_.begin();
-				si != bvp.second->edges_.end(); si ++)
-				neweset.insert(newe[*si]);
-			for(std::set<unsigned>::iterator si = bvp.second->faces_.begin();
-				si != bvp.second->faces_.end(); si ++)
-				newfset.insert(newf[*si]);
+            for(std::set<unsigned>::iterator si = bvp.second->edges_.begin();
+                si != bvp.second->edges_.end(); si ++){
+                if(newe[*si]!=-1){
+                    neweset.insert(newe[*si]);
+                }
+            }
+            for(std::set<unsigned>::iterator si = bvp.second->faces_.begin();
+                si != bvp.second->faces_.end(); si ++){
+                if(newf[*si]!=-1){
+                    newfset.insert(newf[*si]);
+                }
+            }
 
-			bvp.second->edges_ = neweset;
-			bvp.second->faces_ = newfset;
-			new_vertices.push_back(bvp);
-		}
+            bvp.second->edges_ = neweset;
+            bvp.second->faces_ = newfset;
+            new_vertices.push_back(bvp);
+        }
+    }
+    for(unsigned i = 0; i < edges.size(); i ++){
+        if(edges[i].first)
+        {
+            Bool_SlabEdgePointer bep;
+            bep = edges[i];
+            std::pair<unsigned,unsigned> newvpair;
+            std::set<unsigned> newfset;
 
-		for(unsigned i = 0; i < edges.size(); i ++)
-			if(edges[i].first)
-			{
-				Bool_SlabEdgePointer bep;
-				bep = edges[i];
-				std::pair<unsigned,unsigned> newvpair;
-				std::set<unsigned> newfset;
+            newvpair.first = newv[bep.second->vertices_.first];
+            newvpair.second = newv[bep.second->vertices_.second];
 
-				newvpair.first = newv[bep.second->vertices_.first];
-				newvpair.second = newv[bep.second->vertices_.second];
+            for(std::set<unsigned>::iterator si = bep.second->faces_.begin();
+                si != bep.second->faces_.end(); si ++){
+                if(newf[*si]!=-1){
+                    newfset.insert(newf[*si]);
+                }
+            }
 
-				for(std::set<unsigned>::iterator si = bep.second->faces_.begin();
-					si != bep.second->faces_.end(); si ++)
-					newfset.insert(newf[*si]);
+            bep.second->vertices_ = newvpair;
+            bep.second->faces_ = newfset;
+            new_edges.push_back(bep);
+        }
+    }
 
-				bep.second->vertices_ = newvpair;
-				bep.second->faces_ = newfset;
-				new_edges.push_back(bep);
-			}
+    for(unsigned i = 0; i < faces.size(); i ++)
+        if(faces[i].first)
+        {
+            Bool_SlabFacePointer bfp;
+            bfp = faces[i];
+            std::set<unsigned> newvset;
+            std::set<unsigned> neweset;
 
-			for(unsigned i = 0; i < faces.size(); i ++)
-				if(faces[i].first)
-				{
-					Bool_SlabFacePointer bfp;
-					bfp = faces[i];
-					std::set<unsigned> newvset;
-					std::set<unsigned> neweset;
+            for(std::set<unsigned>::iterator si = bfp.second->vertices_.begin();
+                si != bfp.second->vertices_.end(); si ++){
+                if(newv[*si]==-1){
+                    std::cerr<<"error vertice!"<<std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                newvset.insert(newv[*si]);
+            }
 
-					for(std::set<unsigned>::iterator si = bfp.second->vertices_.begin();
-						si != bfp.second->vertices_.end(); si ++)
-						newvset.insert(newv[*si]);
+            for(std::set<unsigned>::iterator si = bfp.second->edges_.begin();
+                si != bfp.second->edges_.end(); si ++){
+                if(newe[*si]==-1){
+                    std::cerr<<"error edge!"<<std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                neweset.insert(newe[*si]);
+            }
 
-					for(std::set<unsigned>::iterator si = bfp.second->edges_.begin();
-						si != bfp.second->edges_.end(); si ++)
-						neweset.insert(newe[*si]);
+            bfp.second->vertices_ = newvset;
+            bfp.second->edges_ = neweset;
+            new_faces.push_back(bfp);
+        }
 
-					bfp.second->vertices_ = newvset;
-					bfp.second->edges_ = neweset;
-					new_faces.push_back(bfp);
-				}
-
-				vertices = new_vertices;
-				edges = new_edges;
-				faces = new_faces;			
+    vertices = new_vertices;
+    edges = new_edges;
+    faces = new_faces;
 }
 
 bool SlabMesh::ValidVertex(unsigned vid){
@@ -323,83 +355,84 @@ bool SlabMesh::Contractible(unsigned vid_src, unsigned vid_tgt)
 
 bool SlabMesh::MergeVertices(unsigned vid_src1, unsigned vid_src2, unsigned &vid_tgt)
 {
-	if(vid_src1 == vid_src2)
-		return false;
+    if(vid_src1 == vid_src2)
+        return false;
 
-	unsigned eid;
-	InsertVertex(new SlabVertex, vid_tgt);
+    unsigned eid;
+    InsertVertex(new SlabVertex, vid_tgt);
 
-	if (vertices[vid_src1].second->saved_vertex || vertices[vid_src2].second->saved_vertex)
-		vertices[vid_tgt].second->saved_vertex = true;
+    if (vertices[vid_src1].second->saved_vertex || vertices[vid_src2].second->saved_vertex)
+        vertices[vid_tgt].second->saved_vertex = true;
 
-	//if (vertices[vid_src1].second->fake_boundary_vertex || vertices[vid_src2].second->fake_boundary_vertex)
-	//	vertices[vid_tgt].second->fake_boundary_vertex = true;
+    //if (vertices[vid_src1].second->fake_boundary_vertex || vertices[vid_src2].second->fake_boundary_vertex)
+    //	vertices[vid_tgt].second->fake_boundary_vertex = true;
 
-	//if (vertices[vid_src1].second->boundary_vertex || vertices[vid_src2].second->boundary_vertex)
-	//	vertices[vid_tgt].second->boundary_vertex = true;
+    //if (vertices[vid_src1].second->boundary_vertex || vertices[vid_src2].second->boundary_vertex)
+    //	vertices[vid_tgt].second->boundary_vertex = true;
 
     std::vector< std::set<unsigned> > tri_vec;//更新的面
-	for(std::set<unsigned>::iterator si = vertices[vid_src1].second->faces_.begin();
-		si != vertices[vid_src1].second->faces_.end(); si ++)
-		if(!faces[*si].second->HasVertex(vid_tgt))
-		{
-			std::set<unsigned> vset = faces[*si].second->vertices_;
-			vset.erase(vid_src1);
-			vset.insert(vid_tgt);
-			tri_vec.push_back(vset);
-		}
+    for(std::set<unsigned>::iterator si = vertices[vid_src1].second->faces_.begin();
+        si != vertices[vid_src1].second->faces_.end(); si ++)
+        if(/*faces[*si].first&&*/!faces[*si].second->HasVertex(vid_src2) && !faces[*si].second->HasVertex(vid_tgt))//关联的面在循环中已经标记为无效
+        {
+            std::set<unsigned> vset = faces[*si].second->vertices_;
+            vset.erase(vid_src1);
+            vset.insert(vid_tgt);
+            tri_vec.push_back(vset);
+        }
 
-		for(std::set<unsigned>::iterator si = vertices[vid_src2].second->faces_.begin();
-			si != vertices[vid_src2].second->faces_.end(); si ++)
-			if(!faces[*si].second->HasVertex(vid_tgt))
-			{
-				std::set<unsigned> vset = faces[*si].second->vertices_;
-				vset.erase(vid_src2);
-				vset.insert(vid_tgt);
-				tri_vec.push_back(vset);
-			}
+    for(std::set<unsigned>::iterator si = vertices[vid_src2].second->faces_.begin();
+        si != vertices[vid_src2].second->faces_.end(); si ++)
+        if(/*faces[*si].first &&*/!faces[*si].second->HasVertex(vid_src1) && !faces[*si].second->HasVertex(vid_tgt))//关联的面在循环中已经标记为无效
+        {
+            std::set<unsigned> vset = faces[*si].second->vertices_;
+            vset.erase(vid_src2);
+            vset.insert(vid_tgt);
+            tri_vec.push_back(vset);
+        }
 
-            std::vector< std::pair<unsigned,unsigned> > edge_vec;//更新的边
-			for(std::set<unsigned>::iterator si = vertices[vid_src1].second->edges_.begin();
-				si != vertices[vid_src1].second->edges_.end(); si ++)
-				if(!edges[*si].second->HasVertex(vid_tgt))
-				{
-					std::pair<unsigned, unsigned> vp = edges[*si].second->vertices_;
-					if(vp.first == vid_src1)
-						vp.first = vid_tgt;
-					if(vp.second == vid_src1)
-						vp.second = vid_tgt;
-					edge_vec.push_back(vp);
-				}
+    std::vector< std::pair<unsigned,unsigned> > edge_vec;//更新的边
+    for(std::set<unsigned>::iterator si = vertices[vid_src1].second->edges_.begin();
+        si != vertices[vid_src1].second->edges_.end(); si ++){
+        if(/*edges[*si].first &&*/!edges[*si].second->HasVertex(vid_src2) && !edges[*si].second->HasVertex(vid_tgt))//关联的边在循环中已经标记为无效
+        {
+            std::pair<unsigned, unsigned> vp = edges[*si].second->vertices_;
+            if(vp.first == vid_src1)
+                vp.first = vid_tgt;
+            if(vp.second == vid_src1)
+                vp.second = vid_tgt;
+            edge_vec.push_back(vp);
+        }
+    }
 
-				for(std::set<unsigned>::iterator si = vertices[vid_src2].second->edges_.begin();
-                    si != vertices[vid_src2].second->edges_.end(); si ++){
-					if(!edges[*si].second->HasVertex(vid_tgt))
-					{
-						std::pair<unsigned, unsigned> vp = edges[*si].second->vertices_;
-						if(vp.first == vid_src2)
-							vp.first = vid_tgt;
-						if(vp.second == vid_src2)
-							vp.second = vid_tgt;
-						edge_vec.push_back(vp);
-					}
+    for (std::set<unsigned>::iterator si = vertices[vid_src2].second->edges_.begin();
+         si != vertices[vid_src2].second->edges_.end(); si++) {
+        if (/*edges[*si].first&&*/!edges[*si].second->HasVertex(vid_src1) && !edges[*si].second->HasVertex(vid_tgt))//关联的边在循环中已经标记为无效
+        {
+            std::pair<unsigned, unsigned> vp = edges[*si].second->vertices_;
+            if (vp.first == vid_src2)
+                vp.first = vid_tgt;
+            if (vp.second == vid_src2)
+                vp.second = vid_tgt;
+            edge_vec.push_back(vp);
+        }
+    }
 
-					DeleteVertex(vid_src1);
-					DeleteVertex(vid_src2);
+    DeleteVertex(vid_src1);
+    DeleteVertex(vid_src2);
 
-					for(unsigned i = 0; i < tri_vec.size(); i ++)
-						InsertFace(tri_vec[i]);
+    for(unsigned i = 0; i < tri_vec.size(); i ++)
+        InsertFace(tri_vec[i]);
 
-					for(unsigned i = 0; i < edge_vec.size(); i ++)
-					{
-						unsigned neweid;
-						InsertEdge(edge_vec[i].first, edge_vec[i].second, neweid);
-					}
+    for(unsigned i = 0; i < edge_vec.size(); i ++)
+    {
+        unsigned neweid;
+        InsertEdge(edge_vec[i].first, edge_vec[i].second, neweid);
+    }
 
-					return true;
-                }
+    return true;
+
 }
-
 unsigned SlabMesh::VertexIncidentEdgeCount(unsigned vid)
 {
 	if(!vertices[vid].first)
@@ -1942,7 +1975,7 @@ void SlabMesh::Simplify(int threshold){
 	int deleteSphereNum = 0;
 	if (!boundary_edge_collapses_queue.empty())
 	{
-		while (deleteSphereNum < threshold && numVertices > 1 && !boundary_edge_collapses_queue.empty())
+        while (deleteSphereNum < threshold && vertices.size() > 1 && !boundary_edge_collapses_queue.empty())
 		{
 			EdgeInfo topEdge = boundary_edge_collapses_queue.top();
 			boundary_edge_collapses_queue.pop();
@@ -1955,7 +1988,7 @@ void SlabMesh::Simplify(int threshold){
 		} 
 	}else
 	{
-		while (deleteSphereNum < threshold && numVertices > 1 && !edge_collapses_queue.empty())
+        while (deleteSphereNum < threshold && vertices.size() > 1 && !edge_collapses_queue.empty())
 		{
 			//if (maxhausdorff_distance / pmesh->bb_diagonal_length >= end_multi)
 			//	break;
