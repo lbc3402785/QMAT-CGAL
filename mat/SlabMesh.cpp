@@ -2712,6 +2712,8 @@ void SlabMesh::PreservBoundaryMethodFour()
 
 void SlabMesh::clear()
 {
+	edge_collapses_queue = std::priority_queue<EdgeInfo>();//add 03.12
+	boundary_edge_collapses_queue = std::priority_queue<EdgeInfo>();//add 03.12
 	for (unsigned i = 0; i < vertices.size(); i++)
 	{
 		if (vertices[i].first)
