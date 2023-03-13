@@ -30,7 +30,7 @@ public:
 	// vertex property
 	bool fake_boundary_vertex;
 	bool boundary_vertex;
-    bool saved_vertex;//是否收缩产生的新点
+    bool saved_vertex;//保留点
     bool non_manifold_vertex;//非流行点标志
     set<unsigned> boundary_edge_vec;//关联的边界边
 	Wm4::Vector3d boundVec;
@@ -43,6 +43,7 @@ public:
 
 	int tag;
 	Wm4::Vector3d normal;
+	bool topo_contractable;//是否可收缩										
 };
 
 

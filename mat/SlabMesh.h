@@ -84,7 +84,7 @@ public:
 	unsigned simplified_inside_edges;
 	unsigned simplified_boundary_edges;
 
-	double bound_weight;
+    double bound_weight;//边界边权值取0.1
 
 public:
 	void AdjustStorage();
@@ -138,6 +138,7 @@ public:
 	void EvaluateEdgeCollapseCost(unsigned eid);
 	void EvaluateEdgeHausdorffCost(unsigned eid);
 	void ReEvaluateEdgeHausdorffCost(unsigned eid);
+	void checkSkeletonAndTube();							
 
 public: 
 	void DistinguishVertexType();

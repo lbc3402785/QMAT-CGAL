@@ -1,5 +1,5 @@
 #include "Mesh.h"
-
+#include <CGAL/Mesh_3/dihedral_angle_3.h>
 #include <CGAL/centroid.h>
 
 #include <Eigen/Dense>
@@ -1283,6 +1283,72 @@ Vector3d MPMesh::NearestPoint(Vector3d p)
         havc ++;
     }while(havc != pVertexList[vid]->vertex_begin());
     return fp;
+}
+
+void MPMesh::detectShardEdge()
+{
+
+    nb_sharp_edges=0;
+    std::map<Surface_mesh::Halfedge_handle,std::pair<Point_3, Point_3> >constrained_edges;
+    int counter = 0;
+    for ( Surface_mesh::Vertex_iterator it = surface_mesh.vertices_begin (); it != surface_mesh.vertices_end (); ++it ) {
+        it->id () = counter;
+        counter++;
+    }
+    for(Surface_mesh::Edge_iterator eb = surface_mesh.edges_begin(), ee = surface_mesh.edges_end() ; eb != ee ; ++eb )
+    {
+        int i0=eb->vertex()->id();
+        int i1=eb->opposite()->vertex()->id();
+        std::pair<int,int> edgePair=i0<i1?std::make_pair(i0,i1):std::make_pair(i1,i0);
+        if ( eb->is_border_edge() ){
+            ++nb_sharp_edges;
+            sharpPointMap[i0]=true;
+            sharpPointMap[i1]=true;
+            //            constraint_hmap[eb]=true;
+            //            constraint_hmap[eb->opposite()]=true;
+            //            constrained_edges[eb]=std::make_pair( eb->opposite()->vertex()->point(),
+            //                                                  eb->vertex()->point() );
+
+            sharpEdgeMap[edgePair]=true;
+        }
+        else{
+            double angle = CGAL::Mesh_3::dihedral_angle(
+                        eb->opposite()->vertex()->point(),
+                        eb->vertex()->point(),
+                        eb->next()->vertex()->point(),
+                        eb->opposite()->next()->vertex()->point() );
+            if ( std::abs(angle)<150 ){
+                ++nb_sharp_edges;
+                sharpPointMap[i0]=true;
+                sharpPointMap[i1]=true;
+                sharpEdgeMap[edgePair]=true;
+                //                constraint_hmap[eb]=true;
+                //                constraint_hmap[eb->opposite()]=true;
+                //                constrained_edges[eb]=std::make_pair( eb->opposite()->vertex()->point(),
+                //                                                      eb->vertex()->point() );
+                //                cst_output << "2 " << eb->opposite()->vertex()->point() << " "
+                //                           << " "  << eb->vertex()->point() << "\n";
+            }
+        }
+    }
+    std::cout<<"nb_sharp_edges:"<<nb_sharp_edges<<std::endl;
+    for(Surface_mesh::Facet_iterator fb=surface_mesh.facets_begin(),fe=surface_mesh.facets_end();fb!=fe;++fb){
+        int i0=fb->halfedge()->vertex()->id();
+        int i1=fb->halfedge()->next()->vertex()->id();
+        int i2=fb->halfedge()->next()->next()->vertex()->id();
+        std::vector<int> tmp={i0,i1,i2};
+        std::sort(tmp.begin(),tmp.end());
+        i0=tmp[0];
+        i1=tmp[1];
+        i2=tmp[2];
+        std::pair<int,int> p01=std::make_pair(i0,i1);
+        std::pair<int,int> p02=std::make_pair(i0,i2);
+        std::pair<int,int> p12=std::make_pair(i1,i2);
+        if(sharpEdgeMap.count(p01)>0&&sharpEdgeMap.count(p02)>0&&sharpEdgeMap.count(p12)>0){
+            std::tuple<int,int,int> tuple=std::make_tuple(i0,i1,i2);
+            sharpFaceMap[tuple]=true;
+        }
+    }
 }
 
 void MPMesh::computedt()
