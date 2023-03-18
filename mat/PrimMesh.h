@@ -59,7 +59,7 @@ public:
 public:
     Sphere sphere;//收缩目标
 	Cone cone;
-	bool valid_cone;
+    bool valid_cone;//用来展示的的有效性
 
 public:
 	double collapse_cost;
@@ -89,7 +89,7 @@ public:
 
 public:
 	SimpleTriangle st[2];
-	bool valid_st;
+    bool valid_st;//用来展示的有效性，不干预计算
 };
 
 

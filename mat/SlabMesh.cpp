@@ -713,10 +713,17 @@ void SlabMesh::ComputeEdgeCone(unsigned eid)
     Cone newc(vertices[edges[eid].second->vertices_.first].second->sphere.center, vertices[edges[eid].second->vertices_.first].second->sphere.radius,
             vertices[edges[eid].second->vertices_.second].second->sphere.center, vertices[edges[eid].second->vertices_.second].second->sphere.radius);
     edges[eid].second->cone = newc;
-    if(newc.type == 1)
+    if(newc.type == 1){
         edges[eid].second->valid_cone = false;
-    else
+        //std::cerr<<"compute invalid cone"<<std::endl;
+//        edges[eid].first=false;
+        for (std::set<unsigned>::iterator si = edges[eid].second->faces_.begin();
+             si != edges[eid].second->faces_.end(); si++){
+            faces[*si].second->valid_st=false;
+        }
+    }else{
         edges[eid].second->valid_cone = true;
+    }
 }
 
 void SlabMesh::ComputeEdgesCone()
