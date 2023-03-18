@@ -24,9 +24,7 @@ void SlabMesh::update()
     ComputeVerticesNormal();//计算每个点的法向，关联面的法向平均值
     DistinguishVertexType();//判断中轴点和中轴边的类型（边界、非流行）
     updateSize();
-}
-
-
+}					   
 void SlabMesh::AdjustStorage()
 {
     std::vector<unsigned> newv;
@@ -747,10 +745,39 @@ void SlabMesh::ComputeFaceSimpleTriangles(unsigned fid)
         pos[count] = vertices[*si].second->sphere.center;
         radius[count] = vertices[*si].second->sphere.radius;
     }
+	Wm4::Vector3d e1 = pos[1] - pos[0];
+    Wm4::Vector3d e2 = pos[2] - pos[0];
+    Wm4::Vector3d normal = e1.Cross(e2);
+    normal.Normalize();
+    faces[fid].second->normal=normal;//中轴夹板默认法
+    if(radius[0]<radius[1]){
+        float tmpRadius=radius[0];
+        radius[0]=radius[1];
+        radius[1]=tmpRadius;
+
+        Wm4::Vector3d tmpPos=pos[0];
+        pos[0]=pos[1];
+        pos[1]=tmpPos;
+    }
+    if(radius[0]<radius[2]){
+        float tmpRadius=radius[0];
+        radius[0]=radius[2];
+        radius[2]=tmpRadius;
+
+        Wm4::Vector3d tmpPos=pos[0];
+        pos[0]=pos[2];
+        pos[2]=tmpPos;
+    }									 
     if(TriangleFromThreeSpheres(pos[0],radius[0],pos[1],radius[1],pos[2],radius[2],st0,st1))
     {
-        faces[fid].second->st[0] = st0;
-        faces[fid].second->st[1] = st1;
+		if(faces[fid].second->st[0].normal.Dot(normal)>0){
+            //与中轴夹板默认法向一致的放在最上面
+            faces[fid].second->st[0] = st0;
+            faces[fid].second->st[1] = st1;
+        }else{
+            faces[fid].second->st[0] = st1;
+            faces[fid].second->st[1] = st0;
+        }
         faces[fid].second->valid_st = true;
     }
     else
@@ -1252,15 +1279,13 @@ bool SlabMesh::MinCostEdgeCollapse(unsigned & eid){
     Wm4::Matrix4d A = edges[eid].second->slab_A;
     Wm4::Vector4d b = edges[eid].second->slab_b;
     double c = edges[eid].second->slab_c;
-    Sphere sphere = edges[eid].second->sphere;
+    Sphere sphere = edges[eid].second->sphere;//merge target
     double hyperbolic_weight = vertices[v1].second->hyperbolic_weight + vertices[v2].second->hyperbolic_weight;
 
     //// 对于合并会发生拓扑改变的边，不允许进行合并
     if (!edges[eid].second->topo_contractable)
         return false;
-    //// 对于合并会发生拓扑改变的边，不允许进行合并
-    if (!edges[eid].second->topo_contractable)
-        return false;
+
     if(!vertices[v1].second->topo_contractable){
         if(vertices[v1].second->edges_.size()==2){//骨骼点连接的边减少到2之后不能再缩减
             return false;
