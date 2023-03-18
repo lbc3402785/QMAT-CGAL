@@ -769,21 +769,7 @@ void ThreeDimensionalShape::LoadInputNMM(std::string fname){
     slab_mesh.iniNumEdges = slab_mesh.numEdges;
     slab_mesh.iniNumFaces = slab_mesh.numFaces;*/
 
-    slab_mesh.CleanIsolatedVertices();//删除孤立点
-    slab_mesh.AdjustStorage();//孤立点不影响边和面但是需要更新序号
-    slab_mesh.computebb();
-    slab_mesh.ComputeFacesCentroid();//计算每个面的重心点及其对应的半径
-    slab_mesh.ComputeFacesNormal();//计算每个面的法向
-    slab_mesh.ComputeVerticesNormal();//计算每个点的法向，关联面的法向平均值
-    slab_mesh.ComputeEdgesCone();
-    slab_mesh.AdjustStorage();//需要更新边和面序号
-    slab_mesh.CleanIsolatedVertices();//再次查找孤立点
-    slab_mesh.AdjustStorage();//孤立点不影响边和面但是需要更新序号
-    slab_mesh.ComputeFacesSimpleTriangles();
-    slab_mesh.AdjustStorage();//需要更新面序号
-    slab_mesh.CleanIsolatedVertices();//再次查找孤立点
-    slab_mesh.AdjustStorage();//孤立点不影响边和面但是需要更新序号
-    slab_mesh.DistinguishVertexType();//判断中轴点和中轴边的类型（边界、非流行）
+    slab_mesh.update();
 }
 
 long ThreeDimensionalShape::PrepareSimplifySlabMesh()

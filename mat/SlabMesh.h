@@ -47,7 +47,8 @@ public:
 	std::vector<Bool_SlabVertexPointer> vertices;
 	std::vector<Bool_SlabEdgePointer> edges;
 	std::vector<Bool_SlabFacePointer> faces;
-
+public:
+	void update();										 
 public:
 	// 1. preserve method one
 	// 2. preserve method two

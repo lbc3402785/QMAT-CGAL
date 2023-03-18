@@ -1,6 +1,24 @@
 #include "SlabMesh.h"
 #include <omp.h>
 
+void SlabMesh::update()
+{
+    CleanIsolatedVertices();//删除孤立点
+    AdjustStorage();//孤立点不影响边和面但是需要更新序号
+    ComputeEdgesCone();
+    AdjustStorage();//需要更新边和面序号
+    CleanIsolatedVertices();//再次查找孤立点
+    AdjustStorage();//孤立点不影响边和面但是需要更新序号
+    ComputeFacesSimpleTriangles();
+    AdjustStorage();//需要更新面序号
+    CleanIsolatedVertices();//再次查找孤立点
+    AdjustStorage();//孤立点不影响边和面但是需要更新序号
+    computebb();
+    ComputeFacesCentroid();//计算每个面的重心点及其对应的半径
+    ComputeFacesNormal();//计算每个面的法向
+    ComputeVerticesNormal();//计算每个点的法向，关联面的法向平均值
+    DistinguishVertexType();//判断中轴点和中轴边的类型（边界、非流行）
+}					   
 void SlabMesh::AdjustStorage()
 {
     std::vector<unsigned> newv;
@@ -373,7 +391,7 @@ bool SlabMesh::MergeVertices(unsigned vid_src1, unsigned vid_src2, unsigned &vid
     std::vector< std::set<unsigned> > tri_vec;//更新的面
     for(std::set<unsigned>::iterator si = vertices[vid_src1].second->faces_.begin();
         si != vertices[vid_src1].second->faces_.end(); si ++)
-        if(/*faces[*si].first&&*/!faces[*si].second->HasVertex(vid_src2) && !faces[*si].second->HasVertex(vid_tgt))//关联的面在循环中已经标记为无效
+        if(faces[*si].first&&!faces[*si].second->HasVertex(vid_src2) && !faces[*si].second->HasVertex(vid_tgt))//关联的面在循环中已经标记为无效
         {
             std::set<unsigned> vset = faces[*si].second->vertices_;
             vset.erase(vid_src1);
@@ -383,7 +401,7 @@ bool SlabMesh::MergeVertices(unsigned vid_src1, unsigned vid_src2, unsigned &vid
 
     for(std::set<unsigned>::iterator si = vertices[vid_src2].second->faces_.begin();
         si != vertices[vid_src2].second->faces_.end(); si ++)
-        if(/*faces[*si].first &&*/!faces[*si].second->HasVertex(vid_src1) && !faces[*si].second->HasVertex(vid_tgt))//关联的面在循环中已经标记为无效
+        if(faces[*si].first &&!faces[*si].second->HasVertex(vid_src1) && !faces[*si].second->HasVertex(vid_tgt))//关联的面在循环中已经标记为无效
         {
             std::set<unsigned> vset = faces[*si].second->vertices_;
             vset.erase(vid_src2);
@@ -394,7 +412,7 @@ bool SlabMesh::MergeVertices(unsigned vid_src1, unsigned vid_src2, unsigned &vid
     std::vector< std::pair<unsigned,unsigned> > edge_vec;//更新的边
     for(std::set<unsigned>::iterator si = vertices[vid_src1].second->edges_.begin();
         si != vertices[vid_src1].second->edges_.end(); si ++){
-        if(/*edges[*si].first &&*/!edges[*si].second->HasVertex(vid_src2) && !edges[*si].second->HasVertex(vid_tgt))//关联的边在循环中已经标记为无效
+        if(edges[*si].first &&!edges[*si].second->HasVertex(vid_src2) && !edges[*si].second->HasVertex(vid_tgt))//关联的边在循环中已经标记为无效
         {
             std::pair<unsigned, unsigned> vp = edges[*si].second->vertices_;
             if(vp.first == vid_src1)
@@ -407,7 +425,7 @@ bool SlabMesh::MergeVertices(unsigned vid_src1, unsigned vid_src2, unsigned &vid
 
     for (std::set<unsigned>::iterator si = vertices[vid_src2].second->edges_.begin();
          si != vertices[vid_src2].second->edges_.end(); si++) {
-        if (/*edges[*si].first&&*/!edges[*si].second->HasVertex(vid_src1) && !edges[*si].second->HasVertex(vid_tgt))//关联的边在循环中已经标记为无效
+        if (edges[*si].first&&!edges[*si].second->HasVertex(vid_src1) && !edges[*si].second->HasVertex(vid_tgt))//关联的边在循环中已经标记为无效
         {
             std::pair<unsigned, unsigned> vp = edges[*si].second->vertices_;
             if (vp.first == vid_src2)
@@ -687,10 +705,17 @@ void SlabMesh::ComputeEdgeCone(unsigned eid)
     Cone newc(vertices[edges[eid].second->vertices_.first].second->sphere.center, vertices[edges[eid].second->vertices_.first].second->sphere.radius,
             vertices[edges[eid].second->vertices_.second].second->sphere.center, vertices[edges[eid].second->vertices_.second].second->sphere.radius);
     edges[eid].second->cone = newc;
-    if(newc.type == 1)
+    if(newc.type == 1){
         edges[eid].second->valid_cone = false;
-    else
+        //std::cerr<<"compute invalid cone"<<std::endl;
+        edges[eid].first=false;
+        for (std::set<unsigned>::iterator si = edges[eid].second->faces_.begin();
+             si != edges[eid].second->faces_.end(); si++){
+            faces[*si].first=false;//取消关联的中轴slab,不处理中轴点,放在最后单独处理
+        }
+    }else{
         edges[eid].second->valid_cone = true;
+    }
 }
 
 void SlabMesh::ComputeEdgesCone()
@@ -714,10 +739,39 @@ void SlabMesh::ComputeFaceSimpleTriangles(unsigned fid)
         pos[count] = vertices[*si].second->sphere.center;
         radius[count] = vertices[*si].second->sphere.radius;
     }
+	Wm4::Vector3d e1 = pos[1] - pos[0];
+    Wm4::Vector3d e2 = pos[2] - pos[0];
+    Wm4::Vector3d normal = e1.Cross(e2);
+    normal.Normalize();
+    faces[fid].second->normal=normal;//中轴夹板默认法
+    if(radius[0]<radius[1]){
+        float tmpRadius=radius[0];
+        radius[0]=radius[1];
+        radius[1]=tmpRadius;
+
+        Wm4::Vector3d tmpPos=pos[0];
+        pos[0]=pos[1];
+        pos[1]=tmpPos;
+    }
+    if(radius[0]<radius[2]){
+        float tmpRadius=radius[0];
+        radius[0]=radius[2];
+        radius[2]=tmpRadius;
+
+        Wm4::Vector3d tmpPos=pos[0];
+        pos[0]=pos[2];
+        pos[2]=tmpPos;
+    }									 
     if(TriangleFromThreeSpheres(pos[0],radius[0],pos[1],radius[1],pos[2],radius[2],st0,st1))
     {
-        faces[fid].second->st[0] = st0;
-        faces[fid].second->st[1] = st1;
+		if(faces[fid].second->st[0].normal.Dot(normal)>0){
+            //与中轴夹板默认法向一致的放在最上面
+            faces[fid].second->st[0] = st0;
+            faces[fid].second->st[1] = st1;
+        }else{
+            faces[fid].second->st[0] = st1;
+            faces[fid].second->st[1] = st0;
+        }
         faces[fid].second->valid_st = true;
     }
     else
@@ -1219,15 +1273,13 @@ bool SlabMesh::MinCostEdgeCollapse(unsigned & eid){
     Wm4::Matrix4d A = edges[eid].second->slab_A;
     Wm4::Vector4d b = edges[eid].second->slab_b;
     double c = edges[eid].second->slab_c;
-    Sphere sphere = edges[eid].second->sphere;
+    Sphere sphere = edges[eid].second->sphere;//merge target
     double hyperbolic_weight = vertices[v1].second->hyperbolic_weight + vertices[v2].second->hyperbolic_weight;
 
     //// 对于合并会发生拓扑改变的边，不允许进行合并
     if (!edges[eid].second->topo_contractable)
         return false;
-    //// 对于合并会发生拓扑改变的边，不允许进行合并
-    if (!edges[eid].second->topo_contractable)
-        return false;
+
     if(!vertices[v1].second->topo_contractable){
         if(vertices[v1].second->edges_.size()==2){//骨骼点连接的边减少到2之后不能再缩减
             return false;
