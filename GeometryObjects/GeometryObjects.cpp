@@ -79,11 +79,11 @@ Cone::Cone(Wm4::Vector3d c0, double r0, Wm4::Vector3d c1, double r1)
 			double vc0len = apexc0.Length();
             Vector3d apexc1 = c1 - apex;
 			double vc1len = apexc1.Length();
-            cangle = sqrt(1.-r0*r0/vc0len/vc0len);//\cos{\phi/2}
+            //cangle = sqrt(1.-r0*r0/vc0len/vc0len);//\cos{\phi/2}
 
 			if(r0 < r1)
 			{
-				//cangle = sqrt(1.-r1*r1/vc1len/vc1len);
+                cangle = sqrt(1.-r1*r1/vc1len/vc1len);
                 smallCenter = apex + apexc0 * cangle * cangle;//small center
                 base = r0 * cangle;//small radius
                 top = r1 * cangle;//bigger radius
@@ -93,7 +93,7 @@ Cone::Cone(Wm4::Vector3d c0, double r0, Wm4::Vector3d c1, double r1)
 			}
 			else
 			{
-				//cangle = sqrt(1.-r0*r0/vc0len/vc0len);
+                cangle = sqrt(1.-r0*r0/vc0len/vc0len);
                 smallCenter = apex + apexc1 * cangle * cangle;
 				base = r1 * cangle;
 				top = r0 * cangle;
