@@ -1,5 +1,31 @@
 #include "SlabMesh.h"
 #include <omp.h>
+void SlabMesh::updateSize()
+{
+    numVertices=vertices.size();
+    numEdges=edges.size();
+    numFaces=faces.size();
+}
+void SlabMesh::update()
+{
+    CleanIsolatedVertices();//删除孤立点
+    AdjustStorage();//孤立点不影响边和面但是需要更新序号
+    ComputeEdgesCone();
+    AdjustStorage();//需要更新边和面序号
+    CleanIsolatedVertices();//再次查找孤立点
+    AdjustStorage();//孤立点不影响边和面但是需要更新序号
+    ComputeFacesSimpleTriangles();
+    AdjustStorage();//需要更新面序号
+    CleanIsolatedVertices();//再次查找孤立点
+    AdjustStorage();//孤立点不影响边和面但是需要更新序号
+    computebb();
+    ComputeFacesCentroid();//计算每个面的重心点及其对应的半径
+    ComputeFacesNormal();//计算每个面的法向
+    ComputeVerticesNormal();//计算每个点的法向，关联面的法向平均值
+    DistinguishVertexType();//判断中轴点和中轴边的类型（边界、非流行）
+    updateSize();
+}
+
 
 void SlabMesh::AdjustStorage()
 {
@@ -373,7 +399,7 @@ bool SlabMesh::MergeVertices(unsigned vid_src1, unsigned vid_src2, unsigned &vid
     std::vector< std::set<unsigned> > tri_vec;//更新的面
     for(std::set<unsigned>::iterator si = vertices[vid_src1].second->faces_.begin();
         si != vertices[vid_src1].second->faces_.end(); si ++)
-        if(/*faces[*si].first&&*/!faces[*si].second->HasVertex(vid_src2) && !faces[*si].second->HasVertex(vid_tgt))//关联的面在循环中已经标记为无效
+        if(faces[*si].first&&!faces[*si].second->HasVertex(vid_src2) && !faces[*si].second->HasVertex(vid_tgt))//关联的面在循环中已经标记为无效
         {
             std::set<unsigned> vset = faces[*si].second->vertices_;
             vset.erase(vid_src1);
@@ -383,7 +409,7 @@ bool SlabMesh::MergeVertices(unsigned vid_src1, unsigned vid_src2, unsigned &vid
 
     for(std::set<unsigned>::iterator si = vertices[vid_src2].second->faces_.begin();
         si != vertices[vid_src2].second->faces_.end(); si ++)
-        if(/*faces[*si].first &&*/!faces[*si].second->HasVertex(vid_src1) && !faces[*si].second->HasVertex(vid_tgt))//关联的面在循环中已经标记为无效
+        if(faces[*si].first &&!faces[*si].second->HasVertex(vid_src1) && !faces[*si].second->HasVertex(vid_tgt))//关联的面在循环中已经标记为无效
         {
             std::set<unsigned> vset = faces[*si].second->vertices_;
             vset.erase(vid_src2);
@@ -394,7 +420,7 @@ bool SlabMesh::MergeVertices(unsigned vid_src1, unsigned vid_src2, unsigned &vid
     std::vector< std::pair<unsigned,unsigned> > edge_vec;//更新的边
     for(std::set<unsigned>::iterator si = vertices[vid_src1].second->edges_.begin();
         si != vertices[vid_src1].second->edges_.end(); si ++){
-        if(/*edges[*si].first &&*/!edges[*si].second->HasVertex(vid_src2) && !edges[*si].second->HasVertex(vid_tgt))//关联的边在循环中已经标记为无效
+        if(edges[*si].first &&!edges[*si].second->HasVertex(vid_src2) && !edges[*si].second->HasVertex(vid_tgt))//关联的边在循环中已经标记为无效
         {
             std::pair<unsigned, unsigned> vp = edges[*si].second->vertices_;
             if(vp.first == vid_src1)
@@ -407,7 +433,7 @@ bool SlabMesh::MergeVertices(unsigned vid_src1, unsigned vid_src2, unsigned &vid
 
     for (std::set<unsigned>::iterator si = vertices[vid_src2].second->edges_.begin();
          si != vertices[vid_src2].second->edges_.end(); si++) {
-        if (/*edges[*si].first&&*/!edges[*si].second->HasVertex(vid_src1) && !edges[*si].second->HasVertex(vid_tgt))//关联的边在循环中已经标记为无效
+        if (edges[*si].first&&!edges[*si].second->HasVertex(vid_src1) && !edges[*si].second->HasVertex(vid_tgt))//关联的边在循环中已经标记为无效
         {
             std::pair<unsigned, unsigned> vp = edges[*si].second->vertices_;
             if (vp.first == vid_src2)
@@ -2008,7 +2034,7 @@ void SlabMesh::checkSkeletonAndTube()
 }
 
 void SlabMesh::Simplify(int threshold){
-
+    updateSize();
     // 当简化到小于50个顶点时，不允许包含端点的边进行合并
     if (numVertices <= 100)
     {
@@ -2985,14 +3011,14 @@ void SlabMesh::ExportSimplifyResult()
 }
 
 void SlabMesh::Export(std::string fname){
+    AdjustStorage();
+    updateSize();
     fname += "___v_";
     fname += std::to_string(static_cast<long long>(numVertices));
     fname += "___e_";
     fname += std::to_string(static_cast<long long>(numEdges));
     fname += "___f_";
     fname += std::to_string(static_cast<long long>(numFaces));
-
-    AdjustStorage();
 
     std::string maname = fname;
     maname += ".ma";
