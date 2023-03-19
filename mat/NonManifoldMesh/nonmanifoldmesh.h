@@ -181,6 +181,7 @@ public:
     double maxRadius=0.0;
     double avgRadius=0.0;
 public:
+    void updateSize();
 	std::vector< Sphere > SampleSpheres(unsigned fid, unsigned num)
 	{
 		Sphere s[3];

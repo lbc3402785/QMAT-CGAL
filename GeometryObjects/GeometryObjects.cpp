@@ -440,8 +440,8 @@ bool ProjectOntoTriangle(const Vector3d & p, const Vector3d & v0, const Vector3d
 {
 	Vector3d norm( (v0-v1).Cross(v0-v2) );
 	norm.Normalize();
-	fp = p - (p-v1).Dot(norm)*norm;
-	if( InsideTriangle(fp, v0, v1, v2) )
+    fp = p - (p-v1).Dot(norm)*norm;//平面投影
+    if( InsideTriangle(fp, v0, v1, v2) )//投影在三角形内部
 	{
 		dist = (fp-p).Length();
 		return true;
@@ -450,7 +450,7 @@ bool ProjectOntoTriangle(const Vector3d & p, const Vector3d & v0, const Vector3d
 	{
 		Vector3d fp01, fp02, fp12;
 		double dist01, dist02, dist12;
-		ProjectOntoLineSegment(p,v0,v1,fp01,dist01);
+        ProjectOntoLineSegment(p,v0,v1,fp01,dist01);
 		ProjectOntoLineSegment(p,v0,v2,fp02,dist02);
 		ProjectOntoLineSegment(p,v1,v2,fp12,dist12);
 		if( (dist01 <= dist02) && (dist01 <= dist12) )

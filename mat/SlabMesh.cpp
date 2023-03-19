@@ -557,7 +557,7 @@ void SlabMesh::DeleteVertex(unsigned vid)
 
     //delete vertices[vid].second;//不能删除还得用于更新拓扑
     vertices[vid].first = false;
-    //numVertices --;
+    numVertices --;
 }
 
 void SlabMesh::InsertVertex(SlabVertex *vertex, unsigned &vid){
@@ -1193,7 +1193,7 @@ bool SlabMesh::MinCostBoundaryEdgeCollapse(unsigned & eid)
             for (set<unsigned>::iterator it = temp_bplist.begin(); it != temp_bplist.end(); it++)
             {
                 unsigned temp_ind = *it;
-                Vector3d bou_ver(pmesh->pVertexList[temp_ind]->point()[0], pmesh->pVertexList[temp_ind]->point()[1], pmesh->pVertexList[temp_ind]->point()[2]);
+                Vector3d bou_ver(pmesh->pVertexList[temp_ind]->point()[0], pmesh->pVertexList[temp_ind]->point()[1], pmesh->pVertexList[temp_ind]->point()[2]);//中轴球关联的采样点
 
                 temp_sum_haus_dis -= pmesh->pVertexList[temp_ind]->slab_hausdorff_dist;//先减去旧的的数据
 
@@ -1208,7 +1208,7 @@ bool SlabMesh::MinCostBoundaryEdgeCollapse(unsigned & eid)
                         if (temp_length >= 0 && temp_length < min_dis)
                         {
                             min_dis = temp_length;
-                            min_index = j;
+                            min_index = j;//最近的中轴球
                         }
                     }
                 }
@@ -1383,7 +1383,7 @@ bool SlabMesh::MinCostEdgeCollapse(unsigned & eid){
     }
 
     set<unsigned> temp_bplist;
-    if (compute_hausdorff)
+    //if (compute_hausdorff)
     {
         for (set<unsigned>::iterator it = vertices[v1].second->bplist.begin(); it != vertices[v1].second->bplist.end(); it++)
             temp_bplist.insert(*it);
@@ -1404,7 +1404,7 @@ bool SlabMesh::MinCostEdgeCollapse(unsigned & eid){
         vertices[vid_tgt].second->related_face = temp_related_face;
         vertices[vid_tgt].second->mean_square_error = temp_mean_squre_error;
         vertices[vid_tgt].second->hyperbolic_weight = hyperbolic_weight;
-
+        vertices[vid_tgt].second->bplist = temp_bplist;//关联的样本点
         // 更新拓扑信息
         InitialTopologyProperty(vid_tgt);
 
@@ -2160,7 +2160,7 @@ void SlabMesh::initBoundaryCollapseQueue()
         }
     }
 }
-
+//point是采样点，返回最近距离不包括最近距离是到三角形顶点距离的情况
 double SlabMesh::NearestPoint(Vector3d point, unsigned vid)
 {
     set<unsigned> near_faces = vertices[vid].second->faces_;
@@ -2185,7 +2185,7 @@ double SlabMesh::NearestPoint(Vector3d point, unsigned vid)
             v[0] = sf.st[i].v[0];
             v[1] = sf.st[i].v[1];
             v[2] = sf.st[i].v[2];
-            ProjectOntoTriangle(point, v[0], v[1], v[2], tfp, td);
+            ProjectOntoTriangle(point, v[0], v[1], v[2], tfp, td);//点到三角形的最近距离和相关投影点
 
             if(td < mind)	mind = td;
         }
@@ -2209,7 +2209,7 @@ double SlabMesh::NearestPoint(Vector3d point, unsigned vid)
         Vector3d v0 = v[0].sphere.center;
         Vector3d v1 = v[1].sphere.center;
         double t((point-v0).Dot(v1-v0) / (v1-v0).SquaredLength());
-        if( (t >= 0.0) && (t <= 1.0) )
+        if( (t >= 0.0) && (t <= 1.0) )//点的投影在线段内
         {
             tfp = (1.0-t)*v0 + t*v1;
             td = (point-tfp).Length();

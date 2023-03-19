@@ -3,7 +3,12 @@
 #include <cstdio>
 #include <boost/lexical_cast.hpp>
 #include <string>
-
+void NonManifoldMesh::updateSize()
+{
+    numVertices=vertices.size();
+    numEdges=edges.size();
+    numFaces=faces.size();
+}
 //update index for vertices,edges,faces
 void NonManifoldMesh::AdjustStorage()
 {
@@ -672,6 +677,8 @@ void NonManifoldMesh::initCollapseQueue() {
 
 void NonManifoldMesh::Export(std::string fname) {
 
+    AdjustStorage();
+    updateSize();
 	if (fname.find(".off") == std::string::npos)
 	{
 		fname += "___v_";
@@ -686,7 +693,7 @@ void NonManifoldMesh::Export(std::string fname) {
 		fname = fname.substr(0, fname.find(".off"));
 	}
 
-	AdjustStorage();
+
 
 
 

@@ -225,8 +225,8 @@ public:
     double vqem_hausdorff_dist;
     unsigned vqem_hansdorff_index;
 
-    double slab_hausdorff_dist;
-    unsigned slab_hansdorff_index;
+    double slab_hausdorff_dist;//到中轴网格的距离
+    unsigned slab_hansdorff_index;//最近的中轴点，已经不是刚开始的四面体球心
 
     // the matrix of A and b
     Wm4::Matrix4d A;

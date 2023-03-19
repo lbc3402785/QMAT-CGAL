@@ -745,20 +745,20 @@ void ThreeDimensionalShape::LoadInputNMM(std::string fname){
         slab_mesh.faces.push_back(bsfp2);
         //slab_mesh.numFaces++;
     }
-//    std::string bplist;
-//    mastream>>bplist;
-//    if(bplist.rfind("#bplist", 0)==0){
-//        for(unsigned i = 0; i < nv; i ++)
-//        {
-//            unsigned size;
-//            mastream>>size;
-//            unsigned tag;
-//            for(unsigned k=0;k<size;k++){
-//                mastream>>tag;
-//                slab_mesh.vertices[i].second->bplist.emplace(tag);
-//            }
-//        }
-//    }
+    std::string bplist;
+    mastream>>bplist;
+    if(bplist.rfind("#bplist", 0)==0){
+        for(unsigned i = 0; i < nv; i ++)
+        {
+            unsigned size;
+            mastream>>size;
+            unsigned tag;
+            for(unsigned k=0;k<size;k++){
+                mastream>>tag;
+                slab_mesh.vertices[i].second->bplist.emplace(tag);
+            }
+        }
+    }
     //newinputnmm.ComputeFacesNormal();
     //newinputnmm.ComputeFacesCentroid();
     //newinputnmm.ComputeFacesSimpleTriangles();
