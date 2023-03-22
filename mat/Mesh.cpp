@@ -1291,14 +1291,19 @@ void MPMesh::detectShardEdge()
     nb_sharp_edges=0;
     std::map<Surface_mesh::Halfedge_handle,std::pair<Point_3, Point_3> >constrained_edges;
     int counter = 0;
+    for ( MPMesh::Vertex_iterator it = this->vertices_begin (); it != this->vertices_end (); ++it ) {
+        it->id = counter;
+        counter++;
+    }
     for ( Surface_mesh::Vertex_iterator it = surface_mesh.vertices_begin (); it != surface_mesh.vertices_end (); ++it ) {
         it->id () = counter;
         counter++;
     }
-    for(Surface_mesh::Edge_iterator eb = surface_mesh.edges_begin(), ee = surface_mesh.edges_end() ; eb != ee ; ++eb )
+//    for(Surface_mesh::Edge_iterator eb = surface_mesh.edges_begin(), ee = surface_mesh.edges_end() ; eb != ee ; ++eb )
+    for(MPMesh::Edge_iterator eb = this->edges_begin(), ee = this->edges_end() ; eb != ee ; ++eb )
     {
-        int i0=eb->vertex()->id();
-        int i1=eb->opposite()->vertex()->id();
+        int i0=eb->vertex()->id;
+        int i1=eb->opposite()->vertex()->id;
         std::pair<int,int> edgePair=i0<i1?std::make_pair(i0,i1):std::make_pair(i1,i0);
         if ( eb->is_border_edge() ){
             ++nb_sharp_edges;
@@ -1332,10 +1337,11 @@ void MPMesh::detectShardEdge()
         }
     }
     std::cout<<"nb_sharp_edges:"<<nb_sharp_edges<<std::endl;
-    for(Surface_mesh::Facet_iterator fb=surface_mesh.facets_begin(),fe=surface_mesh.facets_end();fb!=fe;++fb){
-        int i0=fb->halfedge()->vertex()->id();
-        int i1=fb->halfedge()->next()->vertex()->id();
-        int i2=fb->halfedge()->next()->next()->vertex()->id();
+//    for(Surface_mesh::Facet_iterator fb=surface_mesh.facets_begin(),fe=surface_mesh.facets_end();fb!=fe;++fb){
+    for(MPMesh::Facet_iterator fb=this->facets_begin(),fe=this->facets_end();fb!=fe;++fb){
+        int i0=fb->halfedge()->vertex()->id;
+        int i1=fb->halfedge()->next()->vertex()->id;
+        int i2=fb->halfedge()->next()->next()->vertex()->id;
         std::vector<int> tmp={i0,i1,i2};
         std::sort(tmp.begin(),tmp.end());
         i0=tmp[0];

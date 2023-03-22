@@ -1,6 +1,7 @@
 #ifndef _MESH_H
 #define _MESH_H
 
+#include <CGAL/Polygon_mesh_processing/refine.h>
 #include <CGAL/Cartesian.h>
 #include <CGAL/Polyhedron_3.h>
 #include <CGAL/Polyhedron_items_with_id_3.h>
@@ -41,7 +42,7 @@
 #include "LinearAlgebra/Wm4Matrix.h"
 #include "GeometryObjects/GeometryObjects.h"
 
-
+namespace PMP = CGAL::Polygon_mesh_processing;
 typedef double simple_numbertype;
 typedef CGAL::Cartesian<simple_numbertype> simple_kernel;
 typedef CGAL::Polyhedron_3<simple_kernel, CGAL::Polyhedron_items_3> SimpleMesh;
@@ -293,9 +294,16 @@ struct MPItems : public CGAL::Polyhedron_items_3
 };
 typedef CGAL::Polyhedron_3<simple_kernel, CGAL::Polyhedron_items_with_id_3> Surface_mesh;
 typedef boost::graph_traits<Surface_mesh const>::edge_descriptor edge_descriptor;
+
+typedef CGAL::AABB_face_graph_triangle_primitive<Surface_mesh> Primitive;
+typedef CGAL::AABB_traits<simple_kernel, Primitive> Traits;
+typedef CGAL::AABB_tree<Traits> Tree;
+typedef Tree::Point_and_primitive_id Point_and_primitive_id;
+
 class MPMesh : public CGAL::Polyhedron_3<simple_kernel, MPItems>
 {
 public:
+    Tree* tree;
     Surface_mesh surface_mesh;
     std::size_t nb_sharp_edges;
     std::map<int,bool> sharpPointMap;
@@ -324,6 +332,9 @@ public:
     MPMesh();
     ~MPMesh()
     {
+        if(tree){
+            delete tree;
+        }
         if(domain != NULL)
             delete domain;
     }
@@ -571,7 +582,6 @@ typedef Mesh::Halfedge_around_facet_circulator Halfedge_around_facet_circulator;
 typedef Mesh::Halfedge_around_vertex_circulator Halfedge_around_vertex_circulator;
 
 typedef Mesh::Edge_iterator Edge_iterator;
-
 
 
 

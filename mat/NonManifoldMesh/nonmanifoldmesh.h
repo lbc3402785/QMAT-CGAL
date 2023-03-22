@@ -58,7 +58,7 @@ public:
 	bool is_non_manifold;
 	bool is_disk;
 	bool is_boundary;
-
+    bool isShow;//temp
 	std::set<unsigned> pole_bplist;
 
 	int vmanifoldid;

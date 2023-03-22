@@ -102,7 +102,14 @@ void SlabMesh::AdjustStorage()
 
             newvpair.first = newv[bep.second->vertices_.first];
             newvpair.second = newv[bep.second->vertices_.second];
-
+            if(newv[bep.second->vertices_.first]==-1){
+                std::cerr<<"error vertice!"<<std::endl;
+                exit(EXIT_FAILURE);
+            }
+            if(newv[bep.second->vertices_.second] ==-1){
+                std::cerr<<"error vertice!"<<std::endl;
+                exit(EXIT_FAILURE);
+            }
             for(std::set<unsigned>::iterator si = bep.second->faces_.begin();
                 si != bep.second->faces_.end(); si ++){
                 if(newf[*si]!=-1){
@@ -714,7 +721,7 @@ void SlabMesh::ComputeEdgeCone(unsigned eid)
     if(newc.type == 1){
         edges[eid].second->valid_cone = false;
         //std::cerr<<"compute invalid cone"<<std::endl;
-//        edges[eid].first=false;
+        //        edges[eid].first=false;
         for (std::set<unsigned>::iterator si = edges[eid].second->faces_.begin();
              si != edges[eid].second->faces_.end(); si++){
             faces[*si].second->valid_st=false;
@@ -745,7 +752,7 @@ void SlabMesh::ComputeFaceSimpleTriangles(unsigned fid)
         pos[count] = vertices[*si].second->sphere.center;
         radius[count] = vertices[*si].second->sphere.radius;
     }
-	Wm4::Vector3d e1 = pos[1] - pos[0];
+    Wm4::Vector3d e1 = pos[1] - pos[0];
     Wm4::Vector3d e2 = pos[2] - pos[0];
     Wm4::Vector3d normal = e1.Cross(e2);
     normal.Normalize();
@@ -767,10 +774,10 @@ void SlabMesh::ComputeFaceSimpleTriangles(unsigned fid)
         Wm4::Vector3d tmpPos=pos[0];
         pos[0]=pos[2];
         pos[2]=tmpPos;
-    }									 
+    }
     if(TriangleFromThreeSpheres(pos[0],radius[0],pos[1],radius[1],pos[2],radius[2],st0,st1))
     {
-		if(faces[fid].second->st[0].normal.Dot(normal)>0){
+        if(faces[fid].second->st[0].normal.Dot(normal)>0){
             //与中轴夹板默认法向一致的放在最上面
             faces[fid].second->st[0] = st0;
             faces[fid].second->st[1] = st1;
@@ -1533,7 +1540,7 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
     double coll_cost = 0.0;
 
     if ((vertices[v1].second->saved_vertex && !vertices[v2].second->saved_vertex) ||
-            (vertices[v2].second->saved_vertex && !vertices[v1].second->saved_vertex))//中轴边有一个点是收缩产生的新点
+            (vertices[v2].second->saved_vertex && !vertices[v1].second->saved_vertex))//中轴边有一个点是保留点收缩产生的新点
     {
         Sphere mid_sphere;
         if (vertices[v1].second->saved_vertex)
@@ -1543,7 +1550,7 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
 
         lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);
     }
-    else if ((vertices[v1].second->saved_vertex && vertices[v2].second->saved_vertex))//中轴边两个点是收缩产生的新点
+    else if ((vertices[v1].second->saved_vertex && vertices[v2].second->saved_vertex))//中轴边两个保留点是收缩产生的新点
     {
         //edges[eid].second->collapse_cost = DBL_MAX;
         //GetBestBoundaryPoint(eid);
