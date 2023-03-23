@@ -763,6 +763,12 @@ void NonManifoldMesh::Export(std::string fname) {
         fout << std::endl;
     }
     //add by me
+     fout <<"#saved_vertex"<< std::endl;
+    for (unsigned i = 0; i < vertices.size(); i++){
+        fout << "s " <<(vertices[i].second->saved_vertex?1:0)<< std::endl;
+        fout << std::endl;
+    }
+    //add by me
     fout <<"#bplist"<< std::endl;
     for (unsigned i = 0; i < vertices.size(); i++){
         fout << vertices[i].second->bplist.size();

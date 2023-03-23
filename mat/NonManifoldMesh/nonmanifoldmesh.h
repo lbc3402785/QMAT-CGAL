@@ -26,7 +26,7 @@ public:
 	//Wm4::Vector3d pos;
 	int tag;
 	std::set<unsigned> bplist; // boundary point list 中轴点关联的的四面体四个点序号
-	
+    bool saved_vertex=false;//保留点
 	// distance criterion
 	//double radius;
 

@@ -30,6 +30,9 @@ public:
 private:
     FT nearestPointOfLine(Point p,Point a,Point b);
     int checkPointInTriangle(Point p,Point a,Point b,Point c);
+    void createSharpSlabEdgeAndFace(int tag,std::pair<int, int> edge, std::map<int, int>& shapePointIndexMap, std::map<std::pair<int, int>, int>& shapeEdgeIndexMap, std::map<std::tuple<int, int, int>, int>& shapeFaceIndexMap);
+    void createSharpSlabTetrahedron(int tag,std::tuple<int, int, int> face, std::map<int, int>& shapePointIndexMap, std::map<std::pair<int, int>, int>& shapeEdgeIndexMap, std::map<std::tuple<int, int, int>, int>& shapeFaceIndexMap);
+    void createSlabFace(std::tuple<int,int,int> face,std::map<int,int>& shapePointIndexMap,std::map<std::pair<int,int>,int>& shapeEdgeIndexMap,std::map<std::tuple<int,int,int>,int>& shapeFaceIndexMap);
 public:
     Mesh input;		// the mesh of the input shape 用来四面体化的数据
 

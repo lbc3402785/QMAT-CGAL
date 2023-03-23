@@ -1295,10 +1295,10 @@ void MPMesh::detectShardEdge()
         it->id = counter;
         counter++;
     }
-    for ( Surface_mesh::Vertex_iterator it = surface_mesh.vertices_begin (); it != surface_mesh.vertices_end (); ++it ) {
-        it->id () = counter;
-        counter++;
-    }
+//    for ( Surface_mesh::Vertex_iterator it = surface_mesh.vertices_begin (); it != surface_mesh.vertices_end (); ++it ) {
+//        it->id () = counter;
+//        counter++;
+//    }
 //    for(Surface_mesh::Edge_iterator eb = surface_mesh.edges_begin(), ee = surface_mesh.edges_end() ; eb != ee ; ++eb )
     for(MPMesh::Edge_iterator eb = this->edges_begin(), ee = this->edges_end() ; eb != ee ; ++eb )
     {
