@@ -2,7 +2,7 @@
 #define _SLABMESH_H
 
 #include "PrimMesh.h"
-
+#include "ceres/ceres.h"
 class SlabPrim
 {
 public:
@@ -44,12 +44,32 @@ typedef std::pair<bool, SlabFace*> Bool_SlabFacePointer;
 class SlabMesh : public PrimMesh
 {
 public:
+    Tree* tree;
+    Surface_mesh surface_mesh;
+public:
+    SlabMesh():tree(nullptr){
+
+    }
+    ~SlabMesh(){
+        if(tree){
+            delete tree;
+        }
+    }
+    void constructTree(Surface_mesh &surface_mesh){
+        this->surface_mesh=surface_mesh;
+        tree=new Tree(CGAL::faces(surface_mesh).first,CGAL::faces(surface_mesh).second,surface_mesh);
+        tree->accelerate_distance_queries();
+    }
+public:
+    void optimize();
+public:
 	std::vector<Bool_SlabVertexPointer> vertices;
 	std::vector<Bool_SlabEdgePointer> edges;
 	std::vector<Bool_SlabFacePointer> faces;
 public:
     void update();
     void updateSize();
+    void compute();
 public:
 	// 1. preserve method one
 	// 2. preserve method two
@@ -175,4 +195,27 @@ public:
 	void InitialTopologyProperty();
 };
 
+namespace fitting {
+struct SphereCost{
+public:
+    SphereCost(int id,SlabMesh* slabMesh):id(id),slabMesh(slabMesh){
+
+    }
+    template<typename T>
+    bool operator()(const T* const params,T* residual)const;
+private:
+    SlabMesh* slabMesh;
+    int id;
+};
+template<typename T>
+bool SphereCost::operator()(const T * const params, T *residual) const
+{
+    Point center(params[4*id+0],params[4*id+1],params[4*id+2]);
+    T radius=params[4*id+3];
+    Point_and_primitive_id pp=slabMesh->tree->closest_point_and_primitive(center);
+    Point closest_point = pp.first;
+    Vector v=(closest_point-center);
+    residual[id]=std::sqrt(v.x()*v.x()+v.y()*v.y()+v.z()*v.z())-radius;
+}
+}
 #endif

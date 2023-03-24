@@ -514,6 +514,7 @@ void ThreeDimensionalShape::LoadInputNMM(std::string fname){
     slab_mesh.iniNumFaces = slab_mesh.numFaces;*/
 
     slab_mesh.update();
+    slab_mesh.constructTree(input.surface_mesh);
 }
 
 long ThreeDimensionalShape::PrepareSimplifySlabMesh()

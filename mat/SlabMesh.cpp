@@ -6,22 +6,30 @@ void SlabMesh::updateSize()
     numEdges=edges.size();
     numFaces=faces.size();
 }
-void SlabMesh::update()
+
+void SlabMesh::compute()
 {
-    CleanIsolatedVertices();//删除孤立点
-    AdjustStorage();//孤立点不影响边和面但是需要更新序号
     ComputeEdgesCone();
-    AdjustStorage();//需要更新边和面序号
-    CleanIsolatedVertices();//再次查找孤立点
-    AdjustStorage();//孤立点不影响边和面但是需要更新序号
     ComputeFacesSimpleTriangles();
-    AdjustStorage();//需要更新面序号
-    CleanIsolatedVertices();//再次查找孤立点
-    AdjustStorage();//孤立点不影响边和面但是需要更新序号
     computebb();
     ComputeFacesCentroid();//计算每个面的重心点及其对应的半径
     ComputeFacesNormal();//计算每个面的法向
     ComputeVerticesNormal();//计算每个点的法向，关联面的法向平均值
+}
+void SlabMesh::optimize()
+{
+    ceres::Problem problem;
+    for(int i=0;i<vertices.size();i++){
+        fitting::SphereCost* cost=new fitting::SphereCost(i,this);
+        ceres::CostFunction* costFunction=new ceres::AutoDiffCostFunction<fitting::SphereCost,1,4*this->vertices.size()>(cost);
+    }
+}
+
+void SlabMesh::update()
+{
+    CleanIsolatedVertices();//删除孤立点
+    AdjustStorage();//孤立点不影响边和面但是需要更新序号
+    compute();
     DistinguishVertexType();//判断中轴点和中轴边的类型（边界、非流行）
     updateSize();
 }					   
@@ -3192,3 +3200,5 @@ void SlabMesh::InitialTopologyProperty() {
         }
     }
 }
+
+
