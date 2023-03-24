@@ -18,10 +18,36 @@ void SlabMesh::compute()
 }
 void SlabMesh::optimize()
 {
+    std::vector<double*> parameter_blocks;
     ceres::Problem problem;
+    ceres::DynamicNumericDiffCostFunction<fitting::SphereCost>* cost_function =
+        new ceres::DynamicNumericDiffCostFunction<fitting::SphereCost>(new fitting::SphereCost(vertices.size(),this));
     for(int i=0;i<vertices.size();i++){
-        fitting::SphereCost* cost=new fitting::SphereCost(i,this);
-        ceres::CostFunction* costFunction=new ceres::AutoDiffCostFunction<fitting::SphereCost,1,4*this->vertices.size()>(cost);
+        cost_function->AddParameterBlock(4);
+        double* parameter=new double[4];
+        parameter[0]=vertices[i].second->sphere.center.X();
+        parameter[1]=vertices[i].second->sphere.center.Y();
+        parameter[2]=vertices[i].second->sphere.center.Z();
+        parameter[3]=vertices[i].second->sphere.radius;
+        parameter_blocks.push_back(parameter);
+
+    }
+    cost_function->SetNumResiduals(vertices.size());
+    problem.AddResidualBlock(cost_function, NULL, parameter_blocks);
+    ceres::Solver::Options solverOptions;
+    solverOptions.linear_solver_type = ceres::SPARSE_SCHUR;
+    solverOptions.num_threads = 1;
+    solverOptions.minimizer_progress_to_stdout = true;
+    ceres::Solver::Summary solverSummary;
+    ceres::Solve(solverOptions, &problem, &solverSummary);
+    std::cout << solverSummary.BriefReport() << "\n";
+    for(int i=0;i<vertices.size();i++){
+        double* parameter=parameter_blocks[i];
+        vertices[i].second->sphere.center.X()=parameter[0];
+        vertices[i].second->sphere.center.Y()=parameter[1];
+        vertices[i].second->sphere.center.Z()=parameter[2];
+        vertices[i].second->sphere.radius=parameter[3];
+        delete parameter;
     }
 }
 
@@ -3201,4 +3227,17 @@ void SlabMesh::InitialTopologyProperty() {
     }
 }
 
-
+namespace fitting {
+bool SphereCost::operator()(double const* const* params, double *residual) const
+{
+    for(int id=0;id<spheresNum;id++){
+        Point center(params[id][0],params[id][1],params[id][2]);
+        double radius=params[id][3];
+        Point_and_primitive_id pp=slabMesh->tree->closest_point_and_primitive(center);
+        Point closest_point = pp.first;
+        Vector v=(closest_point-center);
+        residual[id]=(std::sqrt(v.x()*v.x()+v.y()*v.y()+v.z()*v.z()))-radius;
+    }
+    return true;
+}
+}
