@@ -36,7 +36,7 @@ void SlabMesh::optimize()
     problem.AddResidualBlock(cost_function, NULL, parameter_blocks);
     ceres::Solver::Options solverOptions;
     solverOptions.linear_solver_type = ceres::SPARSE_SCHUR;
-    solverOptions.num_threads = 1;
+    solverOptions.num_threads = 10;
     solverOptions.minimizer_progress_to_stdout = true;
     ceres::Solver::Summary solverSummary;
     ceres::Solve(solverOptions, &problem, &solverSummary);
