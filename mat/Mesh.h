@@ -294,6 +294,8 @@ struct MPItems : public CGAL::Polyhedron_items_3
 };
 typedef CGAL::Polyhedron_3<simple_kernel, CGAL::Polyhedron_items_with_id_3> Surface_mesh;
 typedef boost::graph_traits<Surface_mesh const>::edge_descriptor edge_descriptor;
+typedef boost::graph_traits<Surface_mesh>::vertex_descriptor vertex_descriptor;
+typedef boost::graph_traits<Surface_mesh>::face_descriptor   face_descriptor;
 
 typedef CGAL::AABB_face_graph_triangle_primitive<Surface_mesh> Primitive;
 typedef CGAL::AABB_traits<simple_kernel, Primitive> Traits;

@@ -1,4 +1,11 @@
 #include "SlabMesh.h"
+#include <CGAL/Surface_mesh.h>
+#include <CGAL/Polygon_mesh_processing/compute_normal.h>
+#include "geometry/Search/Sphere.h"
+
+#include "geometry/Search/Cone.h"
+#include "geometry/Search/Sphere.h"
+#include "geometry/Search/Triangle.h"
 #include <omp.h>
 void SlabMesh::updateSize()
 {
@@ -16,38 +23,169 @@ void SlabMesh::compute()
     ComputeFacesNormal();//计算每个面的法向
     ComputeVerticesNormal();//计算每个点的法向，关联面的法向平均值
 }
-void SlabMesh::optimize()
+MyCGAL::Primitives::BVHAccel<double>* SlabMesh::constructBVH(torch::Tensor& mn)
 {
-    std::vector<double*> parameter_blocks;
-    ceres::Problem problem;
-    ceres::DynamicNumericDiffCostFunction<fitting::SphereCost>* cost_function =
-        new ceres::DynamicNumericDiffCostFunction<fitting::SphereCost>(new fitting::SphereCost(vertices.size(),this));
+
+    std::vector<MyCGAL::Primitives::Object<double>*> objects;
     for(int i=0;i<vertices.size();i++){
-        cost_function->AddParameterBlock(4);
-        double* parameter=new double[4];
-        parameter[0]=vertices[i].second->sphere.center.X();
-        parameter[1]=vertices[i].second->sphere.center.Y();
-        parameter[2]=vertices[i].second->sphere.center.Z();
-        parameter[3]=vertices[i].second->sphere.radius;
-        parameter_blocks.push_back(parameter);
+        if(vertices[i].first){
+            if(mn[i][3].item<double>()>0){
+                MyCGAL::Primitives::Vector3<double> c(mn[i][0].item<double>(),mn[i][1].item<double>(),mn[i][2].item<double>());
+                MyCGAL::Primitives::Sphere<double>*sphere=new MyCGAL::Primitives::Sphere<double>(c,mn[i][3].item<double>());
+                objects.push_back(sphere);
+            }
+        }
 
     }
-    cost_function->SetNumResiduals(vertices.size());
-    problem.AddResidualBlock(cost_function, NULL, parameter_blocks);
-    ceres::Solver::Options solverOptions;
-    solverOptions.linear_solver_type = ceres::SPARSE_SCHUR;
-    solverOptions.num_threads = 10;
-    solverOptions.minimizer_progress_to_stdout = true;
-    ceres::Solver::Summary solverSummary;
-    ceres::Solve(solverOptions, &problem, &solverSummary);
-    std::cout << solverSummary.BriefReport() << "\n";
+    for(int i=0;i<edges.size();i++){
+        if(edges[i].first){
+            int64_t i0=edges[i].second->vertices_.first;
+            int64_t i1=edges[i].second->vertices_.second;
+            MyCGAL::Primitives::Vector3<double> c0(mn[i0][0].item<double>(),mn[i0][1].item<double>(),mn[i0][2].item<double>());
+            double r0=mn[i0][3].item<double>();
+            MyCGAL::Primitives::Vector3<double> c1(mn[i1][0].item<double>(),mn[i1][1].item<double>(),mn[i1][2].item<double>());
+            double r1=mn[i1][3].item<double>();
+            MyCGAL::Primitives::Cone<double> *cone=new MyCGAL::Primitives::Cone<double>(c0,r0,c1,r1);
+            if(cone->type==1){
+                delete cone;
+            }else{
+                objects.push_back(cone);
+            }
+        }
+    }
+    for(int i=0;i<faces.size();i++){
+        if(faces[i].first){
+            MyCGAL::Primitives::Triangle<double>* st0=new MyCGAL::Primitives::Triangle<double>();
+            MyCGAL::Primitives::Triangle<double>* st1=new MyCGAL::Primitives::Triangle<double>();
+            MyCGAL::Primitives::Vector3d pos[3];
+            double radius[3];
+            unsigned count = 0;
+            for(std::set<unsigned>::iterator si = faces[i].second->vertices_.begin();
+                si != faces[i].second->vertices_.end(); si ++, count ++)
+            {
+                pos[count] = MyCGAL::Primitives::Vector3d(mn[*si][0].item<double>(),mn[*si][1].item<double>(),mn[*si][2].item<double>());
+                radius[count] = mn[*si][3].item<double>();
+            }
+            MyCGAL::Primitives::Vector3d e1 = pos[1] - pos[0];
+            MyCGAL::Primitives::Vector3d e2 = pos[2] - pos[0];
+            MyCGAL::Primitives::Vector3d normal = cross(e1,e2);
+            normal.normalize();
+
+            if(radius[0]<radius[1]){
+                float tmpRadius=radius[0];
+                radius[0]=radius[1];
+                radius[1]=tmpRadius;
+
+                MyCGAL::Primitives::Vector3d tmpPos=pos[0];
+                pos[0]=pos[1];
+                pos[1]=tmpPos;
+            }
+            if(radius[0]<radius[2]){
+                float tmpRadius=radius[0];
+                radius[0]=radius[2];
+                radius[2]=tmpRadius;
+
+                MyCGAL::Primitives::Vector3d tmpPos=pos[0];
+                pos[0]=pos[2];
+                pos[2]=tmpPos;
+            }
+            if(MyCGAL::Primitives::TriangleFromThreeSpheres<double>(pos[0],radius[0],pos[1],radius[1],pos[2],radius[2],*st0,*st1))
+            {
+                objects.push_back(st0);
+                objects.push_back(st1);
+            }else{
+                delete st0;
+                delete st1;
+            }
+        }
+    }
+    MyCGAL::Primitives::BVHAccel<double>* bvh=new MyCGAL::Primitives::BVHAccel<double>(objects);
+    return bvh;
+}
+
+void SlabMesh::optimize()
+{
+    //prepare triangle mesh data
+    int counter=0;
+    for ( Surface_mesh::Vertex_iterator it = surface_mesh.vertices_begin (); it != surface_mesh.vertices_end (); ++it ) {
+        it->id () = counter;
+        counter++;
+    }
+    //torch::Tensor tn0=torch::zeros({static_cast<long long>(surface_mesh.size_of_vertices()),3});
+    std::map<face_descriptor,Vector> fnormals;
+    std::map<vertex_descriptor,Vector> vnormals;
+    CGAL::Polygon_mesh_processing::compute_normals(surface_mesh,
+                                                   boost::make_assoc_property_map(vnormals),
+                                                   boost::make_assoc_property_map(fnormals));
+    //std::cout << "Vertex normals :" << std::endl;
+    for(vertex_descriptor vd: CGAL::vertices(surface_mesh)){
+        std::cout <<vd->point()<< std::endl;
+        std::cout /*<<vd->id()<<":"*/<< vnormals[vd] << std::endl;
+        //        tn0[vd->id()][0]= vnormals[vd].x();
+        //        tn0[vd->id()][1]= vnormals[vd].y();
+        //        tn0[vd->id()][2]= vnormals[vd].z();
+    }
+    //prepare medial axis data
+    torch::Tensor m0=torch::zeros({static_cast<long long>(vertices.size()),4});
     for(int i=0;i<vertices.size();i++){
-        double* parameter=parameter_blocks[i];
-        vertices[i].second->sphere.center.X()=parameter[0];
-        vertices[i].second->sphere.center.Y()=parameter[1];
-        vertices[i].second->sphere.center.Z()=parameter[2];
-        vertices[i].second->sphere.radius=parameter[3];
-        delete parameter;
+        m0[i][0]=vertices[i].second->sphere.center.X();
+        m0[i][1]=vertices[i].second->sphere.center.Y();
+        m0[i][2]=vertices[i].second->sphere.center.Z();
+        m0[i][3]=vertices[i].second->sphere.radius;
+    }
+    torch::Tensor eids=torch::zeros({static_cast<long long>(edges.size()),2},torch::TensorOptions(torch::kLong));
+    for(int i=0;i<edges.size();i++){
+        eids[i][0]=static_cast<long long>(edges[i].second->vertices_.first);
+        eids[i][1]=static_cast<long long>(edges[i].second->vertices_.second);
+    }
+
+    torch::Tensor v0=m0.index_select(1,torch::tensor({0,1,2}));
+    torch::Tensor r0=m0.index_select(1,torch::tensor({3}));
+    torch::Tensor e0=v0.index_select(0,eids.select(1,0))-v0.index_select(0,eids.select(1,1));
+    torch::Tensor d0=r0.index_select(0,eids.select(1,0))-r0.index_select(0,eids.select(1,1));
+    m0.set_requires_grad(true);
+    std::vector<torch::Tensor> parameters;
+    parameters.push_back(m0);
+    // 定义均方误差损失函数
+    torch::nn::MSELoss loss_fn;
+    DistToBoundaryLoss distLoss(tree);
+    torch::optim::Adam optimizer(parameters, torch::optim::AdamOptions(0.28).betas({0.9, 0.5}));
+    int times=0;
+    while(times<50){
+        //torch::Tensor el=v0.index_select(0,eids.select(1,0))-v0.index_select(0,eids.select(1,1));
+        torch::Tensor loss=distLoss.forward(m0)/*+0.1*loss_fn(e0,el)*/;
+        optimizer.zero_grad();
+        loss.backward();
+        optimizer.step();
+        if(times % 10 == 0)
+        {
+            std::cout<<times<<"th total mean loss:"<<std::setprecision(6)<<loss.item().toFloat()<<std::endl;
+        }
+        times++;
+    }
+    //step 2
+    PointToMatLoss pointToMatLoss;
+    times=0;
+    while(times<10){
+        torch::Tensor vn=m0.index_select(1,torch::tensor({0,1,2}));
+        torch::Tensor el=vn.index_select(0,eids.select(1,0))-vn.index_select(0,eids.select(1,1));
+        torch::Tensor loss=pointToMatLoss.forward(this,m0,surface_mesh,vnormals)+100.*loss_fn(e0,el);
+        optimizer.zero_grad();
+        loss.backward();
+        optimizer.step();
+        //        if(times % 10 == 0)
+        //        {
+        std::cout<<times<<"th total mean loss:"<<std::setprecision(6)<<loss.item().toDouble()<<std::endl;
+        //        }
+        times++;
+    }
+
+    torch::Tensor mn=m0.detach();
+    for(int i=0;i<vertices.size();i++){
+        vertices[i].second->sphere.center.X()=mn[i][0].item().toDouble();
+        vertices[i].second->sphere.center.Y()=mn[i][1].item().toDouble();
+        vertices[i].second->sphere.center.Z()=mn[i][2].item().toDouble();
+        vertices[i].second->sphere.radius=mn[i][3].item().toDouble();
     }
 }
 
@@ -1940,7 +2078,7 @@ void SlabMesh::EvaluateEdgeHausdorffCost(unsigned eid)
     double temp_coll_cost = 0.5 * (lamdar * edges[eid].second->slab_A).Dot(lamdar)
             - edges[eid].second->slab_b.Dot(lamdar) + edges[eid].second->slab_c;
 
-    edges[eid].second->collapse_cost = coll_cost;
+    edges[eid].second->collapse_cost = coll_cost;//bplist当中距离收缩点的最大距离
     edges[eid].second->sphere.center = Wm4::Vector3d(lamdar.X(), lamdar.Y(), lamdar.Z());
     edges[eid].second->sphere.radius = lamdar.W();
 }
@@ -3227,6 +3365,134 @@ void SlabMesh::InitialTopologyProperty() {
     }
 }
 
+MyCGAL::Primitives::BVHAccel<double> *PointToMatLoss::constructBVH(SlabMesh *mesh, at::Tensor &mn)
+{
+
+    std::vector<MyCGAL::Primitives::Object<double>*> objects;
+    for(int i=0;i<mesh->vertices.size();i++){
+        if(mesh->vertices[i].first){
+            if(mn[i][3].item<double>()>0){
+                MyCGAL::Primitives::Vector3<double> c(mn[i][0].item<double>(),mn[i][1].item<double>(),mn[i][2].item<double>());
+                MyCGAL::Primitives::Sphere<double>*sphere=new MyCGAL::Primitives::Sphere<double>(c,mn[i][3].item<double>());
+                objects.push_back(sphere);
+            }
+        }
+
+    }
+    for(int i=0;i<mesh->edges.size();i++){
+        if(mesh->edges[i].first){
+            int64_t i0=mesh->edges[i].second->vertices_.first;
+            int64_t i1=mesh->edges[i].second->vertices_.second;
+            MyCGAL::Primitives::Vector3<double> c0(mn[i0][0].item<double>(),mn[i0][1].item<double>(),mn[i0][2].item<double>());
+            double r0=mn[i0][3].item<double>();
+            MyCGAL::Primitives::Vector3<double> c1(mn[i1][0].item<double>(),mn[i1][1].item<double>(),mn[i1][2].item<double>());
+            double r1=mn[i1][3].item<double>();
+            MyCGAL::Primitives::Cone<double> *cone=new MyCGAL::Primitives::Cone<double>(c0,r0,c1,r1);
+            if(cone->type==1){
+                delete cone;
+            }else{
+                objects.push_back(cone);
+            }
+        }
+    }
+    for(int i=0;i<mesh->faces.size();i++){
+        if(mesh->faces[i].first){
+            MyCGAL::Primitives::Triangle<double>* st0=new MyCGAL::Primitives::Triangle<double>();
+            MyCGAL::Primitives::Triangle<double>* st1=new MyCGAL::Primitives::Triangle<double>();
+            MyCGAL::Primitives::Vector3d pos[3];
+            double radius[3];
+            unsigned count = 0;
+            for(std::set<unsigned>::iterator si = mesh->faces[i].second->vertices_.begin();
+                si != mesh->faces[i].second->vertices_.end(); si ++, count ++)
+            {
+                pos[count] = MyCGAL::Primitives::Vector3d(mn[*si][0].item<double>(),mn[*si][1].item<double>(),mn[*si][2].item<double>());
+                radius[count] = mn[*si][3].item<double>();
+            }
+            MyCGAL::Primitives::Vector3d e1 = pos[1] - pos[0];
+            MyCGAL::Primitives::Vector3d e2 = pos[2] - pos[0];
+            MyCGAL::Primitives::Vector3d normal = cross(e1,e2);
+            normal.normalize();
+
+            if(radius[0]<radius[1]){
+                float tmpRadius=radius[0];
+                radius[0]=radius[1];
+                radius[1]=tmpRadius;
+
+                MyCGAL::Primitives::Vector3d tmpPos=pos[0];
+                pos[0]=pos[1];
+                pos[1]=tmpPos;
+            }
+            if(radius[0]<radius[2]){
+                float tmpRadius=radius[0];
+                radius[0]=radius[2];
+                radius[2]=tmpRadius;
+
+                MyCGAL::Primitives::Vector3d tmpPos=pos[0];
+                pos[0]=pos[2];
+                pos[2]=tmpPos;
+            }
+            if(MyCGAL::Primitives::TriangleFromThreeSpheres<double>(pos[0],radius[0],pos[1],radius[1],pos[2],radius[2],*st0,*st1))
+            {
+                objects.push_back(st0);
+                objects.push_back(st1);
+            }else{
+                delete st0;
+                delete st1;
+            }
+        }
+    }
+    MyCGAL::Primitives::BVHAccel<double>* bvh=new MyCGAL::Primitives::BVHAccel<double>(objects);
+    return bvh;
+}
+at::Tensor PointToMatLoss::forward(SlabMesh *mesh,torch::Tensor& m0,Surface_mesh& surface_mesh,
+                                   std::map<vertex_descriptor,Vector>&vnormals)
+{
+    MyCGAL::Primitives::BVHAccel<double>*bvh=constructBVH(mesh,m0);
+    torch::Tensor sum=torch::zeros({1},torch::kDouble);
+//    double MAX=std::numeric_limits<double>::max();
+    int count=0;
+    for(vertex_descriptor vd: CGAL::vertices(surface_mesh)){
+        MyCGAL::Primitives::Vector3d point(vd->point().x(),vd->point().y(),vd->point().z());
+//        MyCGAL::Primitives::Vector3d dir(vnormals[vd].x(),vnormals[vd].y(),vnormals[vd].z());
+//        MyCGAL::Primitives::Line<double> ray(point,-dir);
+//        double t=MAX;
+//        MyCGAL::Primitives::Object<double>*obj=bvh->intersect(ray,t);
+//        if(obj){
+//            //            MyCGAL::Primitives::Vector3d v=ray(t)-point;
+//            //            sum+=v.squaredNorm();
+//            MyCGAL::Primitives::Vector3d normal;
+//            switch (obj->ObjectType) {
+//            case 1:{
+//                MyCGAL::Primitives::Triangle<double>* tri=static_cast<MyCGAL::Primitives::Triangle<double>*>(obj);
+//                normal = tri->normal;
+//                break;
+//            }
+//            case 2:{
+//                MyCGAL::Primitives::Sphere<double>* sphere=static_cast<MyCGAL::Primitives::Sphere<double>*>(obj);
+//                normal = (ray(t) - sphere->center)*sphere->radiusInv;
+//                break;
+//            }
+//            case 3:{
+//                MyCGAL::Primitives::Cone<double>* cone=static_cast<MyCGAL::Primitives::Cone<double>*>(obj);
+//                MyCGAL::Primitives::Vector3d cp=(ray(t)-cone->apex);
+//                normal=cp*dot(cp,cone->axis)-cp.squaredNorm()*cone->axis;
+//                normal.normalize();
+//                break;
+//            }
+//            }
+//            //std::cout << "t:" << t << std::endl;
+//            MyCGAL::Primitives::Vector3d v=(ray(t)-point)*dot(normal,dir);
+//            //std::cout << "v.squaredNorm():" << v.squaredNorm() << std::endl;
+//            sum+=v.squaredNorm();
+//            //print(sum);
+//            count++;
+//        }
+
+    }
+    if(count>0)sum/=count;
+    delete bvh;
+    return sum;
+}
 namespace fitting {
 bool SphereCost::operator()(double const* const* params, double *residual) const
 {

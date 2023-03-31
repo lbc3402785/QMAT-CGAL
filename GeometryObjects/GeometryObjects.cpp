@@ -118,7 +118,7 @@ Cone::Cone(Wm4::Vector3d c0, double r0, Wm4::Vector3d c1, double r1)
 bool Cone::ProjectOntoCone(const Vector3d & p, Vector3d & fp, double & signeddist)
 {
 	Vector3d apexp;
-    apexp = p - smallCenter;//小圆圆心指向顶点
+    apexp = p - smallCenter;//小圆圆心指向顶点p
     Vector3d apexpCaxis = apexp.Cross(axis);//顶点和圆锥轴构成的面的法向量
 
 	Wm4::Vector3d v0,v1;
@@ -139,29 +139,29 @@ bool Cone::ProjectOntoCone(const Vector3d & p, Vector3d & fp, double & signeddis
 	else
 	{
 		bool interior = true;
-		double dp = apexp.Dot(axis);
-		if( (dp < 0) || (dp > height) ) 
+        double dp = apexp.Dot(axis);//顶点到smallCenter的轴向距离
+        if( (dp < 0) || (dp > height) )//投影不在圆锥表面
 			interior = false;
 		else
-        {//顶点在圆锥轴的投影在圆锥内部
+        {//顶点在圆锥轴的投影在圆锥表面
 			double cone_dist_to_axis = dp/height * top + (height-dp)/height * base;
 			double dist_to_axis;
 			Vector3d tfp;
             ProjectOntoLineSegment(p,smallCenter,smallCenter+axis*height,tfp,dist_to_axis);
-			if(dist_to_axis > cone_dist_to_axis)
+            if(dist_to_axis > cone_dist_to_axis)//顶点到轴的距离大于投影点到轴的距离，说明顶点在圆锥外部
 				interior = false;
 		}
 		apexp = apexp - apexp.Dot(axis)*axis;
 		apexp.Normalize();
 
-        v0 = smallCenter + apexp * base;
-        v1 = smallCenter + axis * height + apexp * top;
+        v0 = smallCenter + apexp * base;//小圆心沿apexp在圆锥表面的投影点
+        v1 = smallCenter + axis * height + apexp * top;//大圆心沿apexp在圆锥表面的投影点
 		double dist;
-		bool res = ProjectOntoLineSegment(p,v0,v1,fp,dist);
+        bool res = ProjectOntoLineSegment(p,v0,v1,fp,dist);//计算投影点
 		if(interior)
-			signeddist = -dist;
+            signeddist = -dist;//在圆锥内部，有向距离设置为负值
 		else
-			signeddist = dist;
+            signeddist = dist;//在圆锥内部，有向距离设置为正值
 		return res;
 	}
 }
@@ -392,22 +392,22 @@ Vector3d ThreeAxesScaling(Vector3d & axis0, double & scale0, Vector3d & axis1, d
 // if fp lies in the triangle, return true; otherwise (on the edges or the vertices), return false
 bool ProjectOntoLineSegment(const Vector3d & p, const Vector3d & v0, const Vector3d & v1, Vector3d & fp, double & dist)
 {
-	double t((p-v0).Dot(v1-v0) / (v1-v0).SquaredLength());
+    double t((p-v0).Dot(v1-v0) / (v1-v0).SquaredLength());//投影点参数
 	if( (t >= 0.0) && (t <= 1.0) )
 	{
-		fp = (1.0-t)*v0 + t*v1;
-		dist = (p-fp).Length();
+        fp = (1.0-t)*v0 + t*v1;//投影点
+        dist = (p-fp).Length();//顶点到投影点距离
 		return true;
 	}
 	else if( t < 0.0)
 	{
-		fp = v0;
+        fp = v0;//最近点
 		dist = (p-v0).Length();
 		return false;
 	}
 	else // t > 1.0
 	{
-		fp = v1;
+        fp = v1;//最近点
 		dist = (p-v1).Length();
 		return false;
 	}

@@ -8,7 +8,8 @@ HEADERS += \
     $$PWD/mat/NonManifoldMesh/nonmanifoldmesh.h \
     $$PWD/mat/PrimMesh.h \
     $$PWD/mat/SlabMesh.h \
-    $$PWD/mat/threedimensionalshape.h
+    $$PWD/mat/threedimensionalshape.h \
+    $$PWD/mat/torch/DistToBoundaryLoss.h
 
 SOURCES += \
     $$PWD/GeometryObjects/GeometryObjects.cpp \
@@ -19,4 +20,5 @@ SOURCES += \
     $$PWD/mat/NonManifoldMesh/nonmanifoldmesh.cpp \
     $$PWD/mat/PrimMesh.cpp \
     $$PWD/mat/SlabMesh.cpp \
-    $$PWD/mat/threedimensionalshape.cpp
+    $$PWD/mat/threedimensionalshape.cpp \
+    $$PWD/mat/torch/DistToBoundaryLoss.cpp

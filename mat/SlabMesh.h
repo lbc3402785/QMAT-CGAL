@@ -1,8 +1,8 @@
 #ifndef _SLABMESH_H
 #define _SLABMESH_H
-
 #include "PrimMesh.h"
-#include "ceres/ceres.h"
+#include "torch/DistToBoundaryLoss.h"
+#include "geometry/Search/BVH.h"
 class SlabPrim
 {
 public:
@@ -60,6 +60,7 @@ public:
         tree=new Tree(CGAL::faces(surface_mesh).first,CGAL::faces(surface_mesh).second,surface_mesh);
         tree->accelerate_distance_queries();
     }
+    MyCGAL::Primitives::BVHAccel<double>* constructBVH(torch::Tensor& m0);
 public:
     void optimize();
 public:
@@ -183,7 +184,7 @@ public:
     double GetRatioHyperbolicEuclid(unsigned eid);
 
     void ExportSimplifyResult();
-    void Export(string fname);
+    void Export(std::string fname);
 
 public:
     void clear();
@@ -194,7 +195,13 @@ public:
     void InitialTopologyProperty(unsigned vid);
     void InitialTopologyProperty();
 };
-
+class PointToMatLoss
+{
+public:
+    PointToMatLoss(){}
+    torch::Tensor forward(SlabMesh *mesh,torch::Tensor& m0,Surface_mesh& surface_mesh,std::map<vertex_descriptor,Vector>&vnormals);
+    MyCGAL::Primitives::BVHAccel<double>* constructBVH(SlabMesh*mesh,torch::Tensor& m0);
+};
 namespace fitting {
 struct SphereCost{
 public:
