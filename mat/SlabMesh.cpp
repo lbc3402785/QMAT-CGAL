@@ -3449,44 +3449,11 @@ at::Tensor PointToMatLoss::forward(SlabMesh *mesh,torch::Tensor& m0,Surface_mesh
 {
     MyCGAL::Primitives::BVHAccel<double>*bvh=constructBVH(mesh,m0);
     torch::Tensor sum=torch::zeros({1},torch::kDouble);
-//    double MAX=std::numeric_limits<double>::max();
+
     int count=0;
     for(vertex_descriptor vd: CGAL::vertices(surface_mesh)){
         MyCGAL::Primitives::Vector3d point(vd->point().x(),vd->point().y(),vd->point().z());
-//        MyCGAL::Primitives::Vector3d dir(vnormals[vd].x(),vnormals[vd].y(),vnormals[vd].z());
-//        MyCGAL::Primitives::Line<double> ray(point,-dir);
-//        double t=MAX;
-//        MyCGAL::Primitives::Object<double>*obj=bvh->intersect(ray,t);
-//        if(obj){
-//            //            MyCGAL::Primitives::Vector3d v=ray(t)-point;
-//            //            sum+=v.squaredNorm();
-//            MyCGAL::Primitives::Vector3d normal;
-//            switch (obj->ObjectType) {
-//            case 1:{
-//                MyCGAL::Primitives::Triangle<double>* tri=static_cast<MyCGAL::Primitives::Triangle<double>*>(obj);
-//                normal = tri->normal;
-//                break;
-//            }
-//            case 2:{
-//                MyCGAL::Primitives::Sphere<double>* sphere=static_cast<MyCGAL::Primitives::Sphere<double>*>(obj);
-//                normal = (ray(t) - sphere->center)*sphere->radiusInv;
-//                break;
-//            }
-//            case 3:{
-//                MyCGAL::Primitives::Cone<double>* cone=static_cast<MyCGAL::Primitives::Cone<double>*>(obj);
-//                MyCGAL::Primitives::Vector3d cp=(ray(t)-cone->apex);
-//                normal=cp*dot(cp,cone->axis)-cp.squaredNorm()*cone->axis;
-//                normal.normalize();
-//                break;
-//            }
-//            }
-//            //std::cout << "t:" << t << std::endl;
-//            MyCGAL::Primitives::Vector3d v=(ray(t)-point)*dot(normal,dir);
-//            //std::cout << "v.squaredNorm():" << v.squaredNorm() << std::endl;
-//            sum+=v.squaredNorm();
-//            //print(sum);
-//            count++;
-//        }
+        std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double> result=bvh->nearest(point);
 
     }
     if(count>0)sum/=count;
