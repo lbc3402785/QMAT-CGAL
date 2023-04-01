@@ -199,8 +199,9 @@ class PointToMatLoss
 {
 public:
     PointToMatLoss(){}
-    torch::Tensor forward(SlabMesh *mesh,torch::Tensor& m0,Surface_mesh& surface_mesh,std::map<vertex_descriptor,Vector>&vnormals);
-    MyCGAL::Primitives::BVHAccel<double>* constructBVH(SlabMesh*mesh,torch::Tensor& m0);
+    torch::Tensor forward(SlabMesh *mesh,torch::Tensor& v0,torch::Tensor &r0,Surface_mesh& surface_mesh);
+    torch::Tensor projectOnSphere(torch::Tensor&c,torch::Tensor&r,torch::Tensor&tp);
+    MyCGAL::Primitives::BVHAccel<double>* constructBVH(SlabMesh*mesh,at::Tensor vn,torch::Tensor rn);
 };
 namespace fitting {
 struct SphereCost{

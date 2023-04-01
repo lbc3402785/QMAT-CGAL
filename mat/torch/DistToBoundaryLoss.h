@@ -10,7 +10,7 @@ public:
     DistToBoundaryLoss(Tree* tree):tree(tree){
 
     }
-    torch::Tensor forward(torch::Tensor& t0);
+    torch::Tensor forward(at::Tensor &v0,at::Tensor &r0);
 private:
     Tree* tree;
 };
