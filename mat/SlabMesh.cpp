@@ -6,6 +6,7 @@
 #include "geometry/Search/Cone.h"
 #include "geometry/Search/Sphere.h"
 #include "geometry/Search/Triangle.h"
+#include "geometry/Search/PairTriangle.h"
 #include <omp.h>
 void SlabMesh::updateSize()
 {
@@ -18,22 +19,21 @@ void SlabMesh::compute()
 {
     ComputeEdgesCone();
     ComputeFacesSimpleTriangles();
-    computebb();
-    ComputeFacesCentroid();//计算每个面的重心点及其对应的半径
-    ComputeFacesNormal();//计算每个面的法向
-    ComputeVerticesNormal();//计算每个点的法向，关联面的法向平均值
+    //computebb();
+    //ComputeFacesCentroid();//计算每个面的重心点及其对应的半径
+    //ComputeFacesNormal();//计算每个面的法向
+    //ComputeVerticesNormal();//计算每个点的法向，关联面的法向平均值
 }
-MyCGAL::Primitives::BVHAccel<double>* SlabMesh::constructBVH(torch::Tensor& mn)
+MyCGAL::Primitives::BVHAccel<double>* SlabMesh::constructBVH()
 {
 
     std::vector<MyCGAL::Primitives::Object<double>*> objects;
     for(int i=0;i<vertices.size();i++){
         if(vertices[i].first){
-            if(mn[i][3].item<double>()>0){
-                MyCGAL::Primitives::Vector3<double> c(mn[i][0].item<double>(),mn[i][1].item<double>(),mn[i][2].item<double>());
-                MyCGAL::Primitives::Sphere<double>*sphere=new MyCGAL::Primitives::Sphere<double>(c,mn[i][3].item<double>());
-                objects.push_back(sphere);
-            }
+            MyCGAL::Primitives::Vector3d c(vertices[i].second->sphere.center.X(),vertices[i].second->sphere.center.Y(),vertices[i].second->sphere.center.Z());
+            MyCGAL::Primitives::Sphere<double>*sphere=new MyCGAL::Primitives::Sphere<double>(c,vertices[i].second->sphere.radius);
+            objects.push_back(sphere);
+
         }
 
     }
@@ -41,10 +41,10 @@ MyCGAL::Primitives::BVHAccel<double>* SlabMesh::constructBVH(torch::Tensor& mn)
         if(edges[i].first){
             int64_t i0=edges[i].second->vertices_.first;
             int64_t i1=edges[i].second->vertices_.second;
-            MyCGAL::Primitives::Vector3<double> c0(mn[i0][0].item<double>(),mn[i0][1].item<double>(),mn[i0][2].item<double>());
-            double r0=mn[i0][3].item<double>();
-            MyCGAL::Primitives::Vector3<double> c1(mn[i1][0].item<double>(),mn[i1][1].item<double>(),mn[i1][2].item<double>());
-            double r1=mn[i1][3].item<double>();
+            MyCGAL::Primitives::Vector3<double> c0(vertices[i0].second->sphere.center.X(),vertices[i0].second->sphere.center.Y(),vertices[i0].second->sphere.center.Z());
+            double r0=vertices[i0].second->sphere.radius;
+            MyCGAL::Primitives::Vector3<double> c1(vertices[i1].second->sphere.center.X(),vertices[i1].second->sphere.center.Y(),vertices[i1].second->sphere.center.Z());
+            double r1=vertices[i1].second->sphere.radius;
             MyCGAL::Primitives::Cone<double> *cone=new MyCGAL::Primitives::Cone<double>(c0,r0,c1,r1);
             if(cone->type==1){
                 delete cone;
@@ -55,16 +55,16 @@ MyCGAL::Primitives::BVHAccel<double>* SlabMesh::constructBVH(torch::Tensor& mn)
     }
     for(int i=0;i<faces.size();i++){
         if(faces[i].first){
-            MyCGAL::Primitives::Triangle<double>* st0=new MyCGAL::Primitives::Triangle<double>();
-            MyCGAL::Primitives::Triangle<double>* st1=new MyCGAL::Primitives::Triangle<double>();
+            MyCGAL::Primitives::Triangle<double> st0;
+            MyCGAL::Primitives::Triangle<double> st1;
             MyCGAL::Primitives::Vector3d pos[3];
             double radius[3];
             unsigned count = 0;
             for(std::set<unsigned>::iterator si = faces[i].second->vertices_.begin();
                 si != faces[i].second->vertices_.end(); si ++, count ++)
             {
-                pos[count] = MyCGAL::Primitives::Vector3d(mn[*si][0].item<double>(),mn[*si][1].item<double>(),mn[*si][2].item<double>());
-                radius[count] = mn[*si][3].item<double>();
+                pos[count] = MyCGAL::Primitives::Vector3d(vertices[*si].second->sphere.center.X(),vertices[*si].second->sphere.center.Y(),vertices[*si].second->sphere.center.Z());
+                radius[count] = vertices[*si].second->sphere.radius;
             }
             MyCGAL::Primitives::Vector3d e1 = pos[1] - pos[0];
             MyCGAL::Primitives::Vector3d e2 = pos[2] - pos[0];
@@ -89,14 +89,18 @@ MyCGAL::Primitives::BVHAccel<double>* SlabMesh::constructBVH(torch::Tensor& mn)
                 pos[0]=pos[2];
                 pos[2]=tmpPos;
             }
-            if(MyCGAL::Primitives::TriangleFromThreeSpheres<double>(pos[0],radius[0],pos[1],radius[1],pos[2],radius[2],*st0,*st1))
+            if(MyCGAL::Primitives::TriangleFromThreeSpheres<double>(pos[0],radius[0],pos[1],radius[1],pos[2],radius[2],st0,st1))
             {
-                objects.push_back(st0);
-                objects.push_back(st1);
-            }else{
-                delete st0;
-                delete st1;
+                MyCGAL::Primitives::ConvexPolyhedron<double> convexPoly;
+                for(Vector3d v:faces[i].second->envelop.vertices){
+                    MyCGAL::Primitives::Vector3d p(v.X(),v.Y(),v.Z());
+                    convexPoly.points.push_back(p);
+                }
+                convexPoly.triangles=faces[i].second->envelop.indexTris;
+                MyCGAL::Primitives::PairTriangle<double> *pairT=new MyCGAL::Primitives::PairTriangle<double>();
+                objects.push_back(pairT);
             }
+
         }
     }
     MyCGAL::Primitives::BVHAccel<double>* bvh=new MyCGAL::Primitives::BVHAccel<double>(objects);
@@ -147,13 +151,13 @@ void SlabMesh::optimize()
     DistToBoundaryLoss distLoss(tree);
     torch::optim::Adam optimizer(parameters, torch::optim::AdamOptions(0.28).betas({0.9, 0.5}));
     int times=0;
-    while(times<5){
+    while(times<60){
         torch::Tensor el=v0.index_select(0,eids.select(1,0))-v0.index_select(0,eids.select(1,1));
-        torch::Tensor loss=distLoss.forward(v0,r0)+0.1*loss_fn(e0,el);
+        torch::Tensor loss=distLoss.forward(this,v0,r0)+0.1*loss_fn(e0,el);
         optimizer.zero_grad();
         loss.backward();
         optimizer.step();
-        if(times % 10 == 0)
+        if(times % 5 == 0)
         {
             std::cout<<times<<"th total mean loss:"<<std::setprecision(6)<<loss.item().toFloat()<<std::endl;
         }
@@ -163,21 +167,23 @@ void SlabMesh::optimize()
     //step 2
     PointToMatLoss pointToMatLoss;
     times=0;
-    while(times<20){
+    double lossVal = 1000.0;
+    while(times<600&& lossVal>1e-3){
 
         torch::Tensor el=v0.index_select(0,eids.select(1,0))-v0.index_select(0,eids.select(1,1));
         torch::Tensor surface2MatLoss = pointToMatLoss.forward(this, v0,r0, surface_mesh);
-        torch::Tensor mat2SurfaceLoss=distLoss.forward(v0,r0);
-        torch::Tensor loss=surface2MatLoss+2*mat2SurfaceLoss+10.*loss_fn(e0,el);
+        torch::Tensor mat2SurfaceLoss=distLoss.forward(this,v0,r0);
+        torch::Tensor loss=surface2MatLoss+0.2*mat2SurfaceLoss+0.1*loss_fn(e0,el);
         optimizer.zero_grad();
         loss.backward();
         optimizer.step();
-        //        if(times % 10 == 0)
-        //        {
-        std::cout<<times<<"th surface2MatLoss mean loss:"<<std::setprecision(6)<<surface2MatLoss.item().toDouble()<<std::endl;
-        std::cout<<times<<"th mat2SurfaceLoss mean loss:"<<std::setprecision(6)<<mat2SurfaceLoss.item().toDouble()<<std::endl;
-        std::cout<<times<<"th total mean loss:"<<std::setprecision(6)<<loss.item().toDouble()<<std::endl;
-        //        }
+        lossVal = loss.item().toDouble();
+        if(times % 10 == 0)
+        {
+            std::cout<<times<<"th surface2MatLoss mean loss:"<<std::setprecision(6)<<surface2MatLoss.item().toDouble()<<std::endl;
+            std::cout<<times<<"th mat2SurfaceLoss mean loss:"<<std::setprecision(6)<<mat2SurfaceLoss.item().toDouble()<<std::endl;
+            std::cout<<times<<"th total mean loss:"<<std::setprecision(6)<< lossVal <<std::endl;
+        }
         times++;
     }
 
@@ -188,6 +194,35 @@ void SlabMesh::optimize()
         vertices[i].second->sphere.center.Y()= vn[i][1].item().toDouble();
         vertices[i].second->sphere.center.Z()= vn[i][2].item().toDouble();
         vertices[i].second->sphere.radius= r0[i][0].item().toDouble();
+    }
+    update();
+    project();
+}
+
+void SlabMesh::project()
+{
+    if(bvh==nullptr)return;
+    projectionMap.clear();
+    int counter = 0;
+    for (Surface_mesh::Vertex_iterator it = surface_mesh.vertices_begin(); it != surface_mesh.vertices_end(); ++it) {
+        it->id() = counter;
+        counter++;
+    }
+#pragma omp parallel for
+    for(vertex_descriptor vd: CGAL::vertices(surface_mesh)){
+        MyCGAL::Primitives::Vector3d point(vd->point().x(),vd->point().y(),vd->point().z());
+        //if(!bvh->contains(point)){
+        std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double> result=bvh->nearest(point);
+        MyCGAL::Primitives::Object<double>*obj=std::get<0>(result);
+
+        if(obj){
+            MyCGAL::Primitives::Vector3d nearest=std::get<1>(result);
+#pragma omp critical
+            {
+                projectionMap[vd->id()]=std::make_pair(Point(nearest.x(),nearest.y(),nearest.z()),std::get<2>(result));
+            }
+        }
+        //}
     }
 }
 
@@ -911,7 +946,92 @@ void SlabMesh::ComputeEdgesCone()
         if(edges[i].first)
             ComputeEdgeCone(i);
 }
+void SlabMesh::ComputeSlabEnvelop(unsigned fid){
+    std::vector<unsigned> vids(faces[fid].second->vertices_.begin(),faces[fid].second->vertices_.end());
+    unsigned i0=vids[0];
+    unsigned i1=vids[1];
+    unsigned i2=vids[2];
+    Vector3d c0=vertices[i0].second->sphere.center;
+    double r0=vertices[i0].second->sphere.radius;
 
+
+    Vector3d c1=vertices[i1].second->sphere.center;
+    double r1=vertices[i1].second->sphere.radius;
+
+    Vector3d c2=vertices[i2].second->sphere.center;
+    double r2=vertices[i2].second->sphere.radius;
+
+    SimpleTriangle st0=faces[fid].second->st[0];
+    SimpleTriangle st1=faces[fid].second->st[1];
+    Vector3d e1 = c1 - c0;
+    Vector3d e2 = c2 - c0;
+    Vector3d normal = e1.Cross(e2);//与中轴夹板默认法向一致的放在最上面
+    normal.Normalize();
+    Vector3d V0_UP=c0+r0*st0.normal;
+    Vector3d V1_UP=c1+r1*st0.normal;
+    Vector3d V2_UP=c2+r2*st0.normal;
+
+    Vector3d V0_DOWN=c0+r0*st1.normal;
+    Vector3d V1_DOWN=c1+r1*st1.normal;
+    Vector3d V2_DOWN=c2+r2*st1.normal;
+    std::vector<Vector3d> vertices={V0_UP,V1_UP,V2_UP,V0_DOWN,V1_DOWN,V2_DOWN};
+
+    SimpleTriangle tri;
+    tri.v[0]=V0_UP;
+    tri.v[1]=V1_UP;
+    tri.v[2]=V2_UP;
+    tri.UpdateNormal();
+    std::vector<std::array<unsigned int,3>>indexTris;
+
+    if(tri.normal.Dot(st0.normal)>0){
+        //V0_UP V1_UP V2_UP 逆时针顺序
+        //===============================
+        std::array<unsigned int,3> t0={0,1,2};//V0_UP V1_UP V2_UP
+        indexTris.push_back(t0);
+        std::array<unsigned int,3> t1={5,4,3};//V2_DOWN V1_DOWN V0_DOWN
+        indexTris.push_back(t1);
+        //===============================
+        std::array<unsigned int,3> t2={0,3,1};//V0_UP,V0_DOWN,V1_UP
+        indexTris.push_back(t2);
+        std::array<unsigned int,3> t3={1,3,4};//V1_UP,V0_DOWN,V1_DOWN
+        indexTris.push_back(t3);
+        //===============================
+        std::array<unsigned int,3> t4={1,4,2};//V1_UP,V1_DOWN,V2_UP
+        indexTris.push_back(t4);
+        std::array<unsigned int,3> t5={2,4,5};//V2_UP,V1_DOWN,V2_DOWN
+        indexTris.push_back(t5);
+        //===============================
+        std::array<unsigned int,3> t6={2,5,0};//V2_UP,V2_DOWN,V0_UP
+        indexTris.push_back(t6);
+        std::array<unsigned int,3> t7={0,5,3};//V0_UP,V2_DOWN,V0_DOWN
+        indexTris.push_back(t7);
+    }
+    else{
+        //V0_UP V1_UP V2_UP 顺时针顺序
+        //===============================
+        std::array<unsigned int,3> t0={2,1,0};//V2_UP V1_UP V0_UP
+        indexTris.push_back(t0);
+        std::array<unsigned int,3> t1={3,4,5};//V0_DOWN V1_DOWN V2_DOWN
+        indexTris.push_back(t1);
+        //===============================
+        std::array<unsigned int,3> t2={0,1,4};//V0_UP,V1_UP,V1_DOWN
+        indexTris.push_back(t2);
+        std::array<unsigned int,3> t3={0,4,3};//V0_UP,V1_DOWN,V0_DOWN
+        indexTris.push_back(t3);
+        //===============================
+        std::array<unsigned int,3> t4={1,2,5};//V1_UP,V2_UP,V2_DOWN
+        indexTris.push_back(t4);
+        std::array<unsigned int,3> t5={1,5,4};//V1_UP,V2_DOWN,V1_DOWN
+        indexTris.push_back(t5);
+        //===============================
+        std::array<unsigned int,3> t6={2,0,3};//V2_UP,V0_UP,V0_DOWN
+        indexTris.push_back(t6);
+        std::array<unsigned int,3> t7={2,3,5};//V2_UP,V0_DOWN,V2_DOWN
+        indexTris.push_back(t7);
+    }
+    faces[fid].second->envelop.vertices=vertices;
+    faces[fid].second->envelop.indexTris=indexTris;
+}
 void SlabMesh::ComputeFaceSimpleTriangles(unsigned fid)
 {
     if(!faces[fid].first)
@@ -960,6 +1080,7 @@ void SlabMesh::ComputeFaceSimpleTriangles(unsigned fid)
             faces[fid].second->st[1] = st0;
         }
         faces[fid].second->valid_st = true;
+        ComputeSlabEnvelop(fid);
     }
     else
         faces[fid].second->valid_st = false;
@@ -3366,7 +3487,59 @@ void SlabMesh::InitialTopologyProperty() {
         }
     }
 }
-
+at::Tensor DistToBoundaryLoss::forward(SlabMesh *mesh, at::Tensor &v0, at::Tensor &r0)
+{
+    torch::Tensor sum=torch::zeros({1},torch::kDouble);
+    int count=0;
+#pragma omp parallel for
+    for(int i=0;i<mesh->vertices.size();i++){
+        if(mesh->vertices[i].first){
+            Point p(v0[i][0].item<double>(),v0[i][1].item<double>(),v0[i][2].item<double>());
+            Point_and_primitive_id pp=tree->closest_point_and_primitive(p);
+            Point closest_point = pp.first;
+#pragma omp critical
+            {
+                torch::Tensor v=v0[i]-torch::tensor({closest_point.x(),closest_point.y(),closest_point.z()});
+                sum+=(v.norm()-r0[i]).square()*0.5;
+                count++;
+            }
+        }
+    }
+    for(unsigned int i=0;i<mesh->edges.size();i++){
+        unsigned int i0=mesh->edges[i].second->vertices_.first;
+        unsigned int i1=mesh->edges[i].second->vertices_.second;
+        torch::Tensor c=(v0[i0]+v0[i1])*0.5;
+        torch::Tensor r=(r0[i0]+r0[i1])*0.5;
+        Point p(c[0].item<double>(),c[1].item<double>(),c[2].item<double>());
+        Point_and_primitive_id pp=tree->closest_point_and_primitive(p);
+        Point closest_point = pp.first;
+#pragma omp critical
+        {
+            torch::Tensor v=c-torch::tensor({closest_point.x(),closest_point.y(),closest_point.z()});
+            sum+=(v.norm()-r).square()*2;
+            count++;
+        }
+    }
+    for(unsigned int i=0;i<mesh->faces.size();i++){
+        std::vector<unsigned int> vids(mesh->faces[i].second->vertices_.begin(),mesh->faces[i].second->vertices_.end());
+        unsigned int i0=vids[0];
+        unsigned int i1=vids[1];
+        unsigned int i2=vids[2];
+        torch::Tensor c=(v0[i0]+v0[i1]+v0[i2])/3.0;
+        torch::Tensor r=(r0[i0]+r0[i1]+r0[i2])/3.0;
+        Point p(c[0].item<double>(),c[1].item<double>(),c[2].item<double>());
+        Point_and_primitive_id pp=tree->closest_point_and_primitive(p);
+        Point closest_point = pp.first;
+#pragma omp critical
+        {
+            torch::Tensor v=c-torch::tensor({closest_point.x(),closest_point.y(),closest_point.z()});
+            sum+=(v.norm()-r).square()*3;
+            count++;
+        }
+    }
+    if(count>0)sum/count;
+    return sum;
+}
 MyCGAL::Primitives::BVHAccel<double> *PointToMatLoss::constructBVH(SlabMesh *mesh, at::Tensor vn,torch::Tensor rn)
 {
 
@@ -3401,8 +3574,8 @@ MyCGAL::Primitives::BVHAccel<double> *PointToMatLoss::constructBVH(SlabMesh *mes
     }
     for(int i=0;i<mesh->faces.size();i++){
         if(mesh->faces[i].first){
-            MyCGAL::Primitives::Triangle<double>* st0=new MyCGAL::Primitives::Triangle<double>();
-            MyCGAL::Primitives::Triangle<double>* st1=new MyCGAL::Primitives::Triangle<double>();
+            MyCGAL::Primitives::Triangle<double> st0;
+            MyCGAL::Primitives::Triangle<double> st1;
             MyCGAL::Primitives::Vector3d pos[3];
             double radius[3];
             unsigned count = 0;
@@ -3437,15 +3610,32 @@ MyCGAL::Primitives::BVHAccel<double> *PointToMatLoss::constructBVH(SlabMesh *mes
                 pos[0]=pos[2];
                 pos[2]=tmpPos;
             }
-            if(MyCGAL::Primitives::TriangleFromThreeSpheres<double>(pos[0],radius[0],pos[1],radius[1],pos[2],radius[2],*st0,*st1))
+            if(MyCGAL::Primitives::TriangleFromThreeSpheres<double>(pos[0],radius[0],pos[1],radius[1],pos[2],radius[2],st0,st1))
             {
-                st0->id=i;
-                st1->id=i;
-                objects.push_back(st0);
-                objects.push_back(st1);
-            }else{
-                delete st0;
-                delete st1;
+                st0.id=i;
+                st1.id=i;
+                std::vector<unsigned> vids(mesh->faces[i].second->vertices_.begin(),mesh->faces[i].second->vertices_.end());
+                unsigned i0=vids[0];
+                unsigned i1=vids[1];
+                unsigned i2=vids[2];
+                MyCGAL::Primitives::Vector3<double> c0(vn[i0][0].item<double>(),vn[i0][1].item<double>(),vn[i0][2].item<double>());
+                double r0=rn[i0][0].item<double>();
+                MyCGAL::Primitives::Vector3<double> c1(vn[i1][0].item<double>(),vn[i1][1].item<double>(),vn[i1][2].item<double>());
+                double r1=rn[i1][0].item<double>();
+                MyCGAL::Primitives::Vector3<double> c2(vn[i2][0].item<double>(),vn[i2][1].item<double>(),vn[i2][2].item<double>());
+                double r2=rn[i2][0].item<double>();
+                MyCGAL::Primitives::Vector3d V0_UP=c0+r0*st0.normal;
+                MyCGAL::Primitives::Vector3d V1_UP=c1+r1*st0.normal;
+                MyCGAL::Primitives::Vector3d V2_UP=c2+r2*st0.normal;
+
+                MyCGAL::Primitives::Vector3d V0_DOWN=c0+r0*st1.normal;
+                MyCGAL::Primitives::Vector3d V1_DOWN=c1+r1*st1.normal;
+                MyCGAL::Primitives::Vector3d V2_DOWN=c2+r2*st1.normal;
+                MyCGAL::Primitives::ConvexPolyhedron<double> convexPoly;
+                convexPoly.points={V0_UP,V1_UP,V2_UP,V0_DOWN,V1_DOWN,V2_DOWN};
+                convexPoly.triangles=mesh->faces[i].second->envelop.indexTris;
+                MyCGAL::Primitives::PairTriangle<double> *pairT=new MyCGAL::Primitives::PairTriangle<double>();
+                objects.push_back(pairT);
             }
         }
     }
@@ -3470,7 +3660,7 @@ at::Tensor PointToMatLoss::forward(SlabMesh *mesh,torch::Tensor& vm,torch::Tenso
     torch::Tensor sum=torch::zeros({1},torch::kDouble);
 
     int count=0;
-    #pragma omp parallel for
+#pragma omp parallel for
     for(vertex_descriptor vd: CGAL::vertices(surface_mesh)){
         MyCGAL::Primitives::Vector3d point(vd->point().x(),vd->point().y(),vd->point().z());
         std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double> result=bvh->nearest(point);
@@ -3479,6 +3669,7 @@ at::Tensor PointToMatLoss::forward(SlabMesh *mesh,torch::Tensor& vm,torch::Tenso
         if(obj){
             torch::Tensor tp=torch::tensor({point.x(),point.y(),point.z()});
             MyCGAL::Primitives::Vector3d p=std::get<1>(result);
+            double signedDist=std::get<2>(result);
             torch::Tensor c;
             torch::Tensor r;
             switch (obj->ObjectType) {
@@ -3519,7 +3710,93 @@ at::Tensor PointToMatLoss::forward(SlabMesh *mesh,torch::Tensor& vm,torch::Tenso
             torch::Tensor v=tp-c;
 #pragma omp critical
             {
-                sum+=(v.norm()-r).square();
+                torch::Tensor x2=(v.norm()-r).square();
+                //torch::Tensor x=x2.sqrt();
+                if(signedDist<0){
+                    //sum+=0.5*(1-torch::tanh(-x));
+                    sum+100*x2;
+                }else{
+                    sum+=x2;
+                }
+                //                if(x.item<double>()<1.0){
+                //                    sum+=x2*0.5;
+                //                }else{
+                //                    sum+=(x-0.5);
+                //                }
+
+                count++;
+            }
+
+        }
+    }
+#pragma omp parallel for
+    for(face_descriptor fd: CGAL::faces(surface_mesh)){
+        Point p0=fd->halfedge()->vertex()->point();
+        Point p1=fd->halfedge()->next()->vertex()->point();
+        Point p2=fd->halfedge()->next()->next()->vertex()->point();
+        Point p((p0.x()+p1.x()+p2.x())/3.0,(p0.y()+p1.y()+p2.y())/3.0,(p0.z()+p1.z()+p2.z())/3.0);
+        MyCGAL::Primitives::Vector3d point(p.x(),p.y(),p.z());
+        std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double> result=bvh->nearest(point);
+        MyCGAL::Primitives::Object<double>*obj=std::get<0>(result);
+
+        if(obj){
+            torch::Tensor tp=torch::tensor({point.x(),point.y(),point.z()});
+            MyCGAL::Primitives::Vector3d p=std::get<1>(result);
+            double signedDist=std::get<2>(result);
+            torch::Tensor c;
+            torch::Tensor r;
+            switch (obj->ObjectType) {
+            case 1:{
+
+                MyCGAL::Primitives::Triangle<double>* tri=static_cast<MyCGAL::Primitives::Triangle<double>*>(obj);
+                std::array<double,3> baryCentric=tri->getBarycentrics(p);
+
+                unsigned int i0=tri->v0.id;
+                unsigned int i1=tri->v1.id;
+                unsigned int i2=tri->v2.id;
+                c=vm[i0]*baryCentric[0]+vm[i1]*baryCentric[1]+vm[i2]*baryCentric[2];
+                r=rm[i0]*baryCentric[0]+rm[i1]*baryCentric[1]+rm[i2]*baryCentric[2];
+                break;
+            }
+            case 2:{
+                MyCGAL::Primitives::Sphere<double>* sphere=static_cast<MyCGAL::Primitives::Sphere<double>*>(obj);
+                c=vm[sphere->id];//{3}
+                r=rm[sphere->id];//{1}
+                break;
+            }
+            case 3:{
+                MyCGAL::Primitives::Cone<double>* cone=static_cast<MyCGAL::Primitives::Cone<double>*>(obj);
+                unsigned int i0=mesh->edges[cone->id].second->vertices_.first;
+                unsigned int i1=mesh->edges[cone->id].second->vertices_.second;
+
+                double r0=rm[i0].item<double>();
+                double r1=rm[i1].item<double>();
+                double radius=(p-cone->apex).norm()*std::sqrt((1-cone->cosThetaSqr)/cone->cosThetaSqr);//||p-apex||*\tan{\phi/2};
+                double w0=(radius-r1)/(r0-r1);//radius=w0*(r0-r1)+r1=w0*r0+w1*r1
+                double w1=1.0-w0;
+                c=vm[i0]*w0+vm[i1]*w1;
+                r=rm[i0]*w0+rm[i1]*w1;
+                break;
+            }
+
+            }
+            torch::Tensor v=tp-c;
+#pragma omp critical
+            {
+                torch::Tensor x2=(v.norm()-r).square();
+                //torch::Tensor x=x2.sqrt();
+                if(signedDist<0){
+                    //sum+=0.5*(1-torch::tanh(-x));
+                    sum+100*x2;
+                }else{
+                    sum+=x2;
+                }
+                //                if(x.item<double>()<1.0){
+                //                    sum+=x2*0.5;
+                //                }else{
+                //                    sum+=(x-0.5);
+                //                }
+
                 count++;
             }
 
@@ -3551,3 +3828,5 @@ bool SphereCost::operator()(double const* const* params, double *residual) const
     return true;
 }
 }
+
+

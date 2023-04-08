@@ -1061,7 +1061,7 @@ bool TriangleFromThreeSpheres(const Vector3d & c0,
             st0.v[0] = c0 + norm * r0;
             st0.v[2] = c1 + norm * r1;
             st0.v[1] = c2 + norm * r2;
-            st0.normal*=-1;
+            st0.UpdateNormal();
         }
         st1.v[0] = c0 - norm * r0;
         st1.v[1] = c1 - norm * r1;
@@ -1071,7 +1071,7 @@ bool TriangleFromThreeSpheres(const Vector3d & c0,
             st1.v[0] = c0 - norm * r0;
             st1.v[2] = c1 - norm * r1;
             st1.v[1] = c2 - norm * r2;
-            st1.normal*=-1;
+            st1.UpdateNormal();
         }
         return true;
     }
@@ -1122,7 +1122,7 @@ bool TriangleFromThreeSpheres(const Vector3d & c0,
             st0.v[0] = c0 + r0*newnorm[0];
             st0.v[2] = c1 + r1*newnorm[0];
             st0.v[1] = c2 + r2*newnorm[0];
-            st0.normal*=-1;
+            st0.UpdateNormal();
         }
 
         st1.v[0] = c0 + r0*newnorm[1];
@@ -1133,7 +1133,7 @@ bool TriangleFromThreeSpheres(const Vector3d & c0,
             st1.v[0] = c0 + r0*newnorm[1];
             st1.v[2] = c1 + r1*newnorm[1];
             st1.v[1] = c2 + r2*newnorm[1];
-            st1.normal*=-1;
+            st1.UpdateNormal();
         }
     }
 

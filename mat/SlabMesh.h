@@ -1,7 +1,9 @@
 #ifndef _SLABMESH_H
 #define _SLABMESH_H
+#undef slots
+#include <torch/torch.h>
+#define slots Q_SLOTS
 #include "PrimMesh.h"
-#include "torch/DistToBoundaryLoss.h"
 #include "geometry/Search/BVH.h"
 class SlabPrim
 {
@@ -32,9 +34,17 @@ public:
 class SlabEdge : public PrimEdge, public SlabPrim
 {
 };
+class SlabEnvelop
+{
+public:
+    std::vector<Vector3d> vertices;
+    std::vector<std::array<unsigned int,3>> indexTris;
+};
 
 class SlabFace : public PrimFace, public SlabPrim
 {
+public:
+    SlabEnvelop envelop;
 };
 
 typedef std::pair<bool, SlabVertex*> Bool_SlabVertexPointer;
@@ -45,9 +55,11 @@ class SlabMesh : public PrimMesh
 {
 public:
     Tree* tree;
+    MyCGAL::Primitives::BVHAccel<double>* bvh;
     Surface_mesh surface_mesh;
+    std::map<unsigned,std::pair<Point,double>> projectionMap;
 public:
-    SlabMesh():tree(nullptr){
+    SlabMesh():tree(nullptr),bvh(nullptr){
 
     }
     ~SlabMesh(){
@@ -60,9 +72,10 @@ public:
         tree=new Tree(CGAL::faces(surface_mesh).first,CGAL::faces(surface_mesh).second,surface_mesh);
         tree->accelerate_distance_queries();
     }
-    MyCGAL::Primitives::BVHAccel<double>* constructBVH(torch::Tensor& m0);
+    MyCGAL::Primitives::BVHAccel<double>* constructBVH();
 public:
     void optimize();
+    void project();
 public:
     std::vector<Bool_SlabVertexPointer> vertices;
     std::vector<Bool_SlabEdgePointer> edges;
@@ -145,7 +158,7 @@ public:
 
     void ComputeEdgeCone(unsigned eid);
     void ComputeEdgesCone();
-
+    void ComputeSlabEnvelop(unsigned fid);
     void ComputeVertexProperty(unsigned vid);
     void ComputeVerticesProperty();
     void ComputeFaceSimpleTriangles(unsigned fid);
@@ -202,6 +215,16 @@ public:
     torch::Tensor forward(SlabMesh *mesh,torch::Tensor& v0,torch::Tensor &r0,Surface_mesh& surface_mesh);
     torch::Tensor projectOnSphere(torch::Tensor&c,torch::Tensor&r,torch::Tensor&tp);
     MyCGAL::Primitives::BVHAccel<double>* constructBVH(SlabMesh*mesh,at::Tensor vn,torch::Tensor rn);
+};
+class DistToBoundaryLoss
+{
+public:
+    DistToBoundaryLoss(Tree* tree):tree(tree){
+
+    }
+    torch::Tensor forward(SlabMesh *mesh,at::Tensor &v0,at::Tensor &r0);
+private:
+    Tree* tree;
 };
 namespace fitting {
 struct SphereCost{
