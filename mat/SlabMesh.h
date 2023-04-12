@@ -4,6 +4,7 @@
 #include <torch/torch.h>
 #define slots Q_SLOTS
 #include "PrimMesh.h"
+#include "geometry/Search/Triangle.h"
 #include "geometry/Search/BVH.h"
 class SlabPrim
 {
@@ -55,9 +56,13 @@ class SlabMesh : public PrimMesh
 {
 public:
     Tree* tree;
+    //MyCGAL::Primitives::BVHAccel<double>* tree;
     MyCGAL::Primitives::BVHAccel<double>* bvh;
     Surface_mesh surface_mesh;
-    std::map<unsigned,std::pair<Point,double>> projectionMap;
+    std::map<unsigned,std::pair<Point,double>> surface2Mat;
+    //std::map<Point,std::pair<Point,Point>> mat2Surface;
+    //std::map<MyCGAL::Primitives::Vector3d,std::pair<MyCGAL::Primitives::Vector3d,MyCGAL::Primitives::Vector3d>> mat2Surface;
+
 public:
     SlabMesh():tree(nullptr),bvh(nullptr){
 
@@ -69,13 +74,35 @@ public:
     }
     void constructTree(Surface_mesh &surface_mesh){
         this->surface_mesh=surface_mesh;
-        tree=new Tree(CGAL::faces(surface_mesh).first,CGAL::faces(surface_mesh).second,surface_mesh);
+        int counter=0;
+        for ( Surface_mesh::Vertex_iterator it = this->surface_mesh.vertices_begin (); it != this->surface_mesh.vertices_end (); ++it ) {
+            it->id () = counter;
+            counter++;
+        }
+        counter = 0;
+        for (Surface_mesh::Face_iterator it = this->surface_mesh.facets_begin(); it != this->surface_mesh.facets_end(); ++it) {
+            it->id() = counter;
+            counter++;
+        }
+        tree=new Tree(CGAL::faces(this->surface_mesh).first,CGAL::faces(this->surface_mesh).second, this->surface_mesh);
         tree->accelerate_distance_queries();
+//        std::vector<MyCGAL::Primitives::Object<double>*>objects;
+//        for(face_descriptor fd: CGAL::faces(surface_mesh)){
+//            Point p0=fd->halfedge()->vertex()->point();
+//            Point p1=fd->halfedge()->next()->vertex()->point();
+//            Point p2=fd->halfedge()->next()->next()->vertex()->point();
+//            MyCGAL::Primitives::Vector3d v0(p0.x(),p0.y(),p0.z());
+//            MyCGAL::Primitives::Vector3d v1(p1.x(),p1.y(),p1.z());
+//            MyCGAL::Primitives::Vector3d v2(p2.x(),p2.y(),p2.z());
+//            MyCGAL::Primitives::Triangle<double> *tri=new MyCGAL::Primitives::Triangle<double>(v0,v1,v2);
+//            objects.push_back(tri);
+//        }
+//        tree=new MyCGAL::Primitives::BVHAccel<double>(objects);
     }
     MyCGAL::Primitives::BVHAccel<double>* constructBVH();
 public:
-    void optimize();
     void project();
+    void inverseProject();
 public:
     std::vector<Bool_SlabVertexPointer> vertices;
     std::vector<Bool_SlabEdgePointer> edges;
@@ -176,7 +203,7 @@ public:
     void ReEvaluateEdgeHausdorffCost(unsigned eid);
     void checkSkeletonAndTube();
 
-public: 
+public:
     void DistinguishVertexType();
     unsigned GetSavedPointNumber();
     unsigned GetConnectPointNumber();
@@ -219,26 +246,13 @@ public:
 class DistToBoundaryLoss
 {
 public:
-    DistToBoundaryLoss(Tree* tree):tree(tree){
+    DistToBoundaryLoss(Tree* tree/*MyCGAL::Primitives::BVHAccel<double>* tree*/):tree(tree){
 
     }
-    torch::Tensor forward(SlabMesh *mesh,at::Tensor &v0,at::Tensor &r0);
+    std::pair<torch::Tensor,torch::Tensor> forward(SlabMesh *mesh,std::map<face_descriptor,Vector> fnormals,at::Tensor &v0,at::Tensor &r0);
 private:
     Tree* tree;
-};
-namespace fitting {
-struct SphereCost{
-public:
-    SphereCost(int spheresNum,SlabMesh* slabMesh):spheresNum(spheresNum),slabMesh(slabMesh){
-
-    }
-
-    bool operator()(double const* const* params,double* residual)const;
-private:
-    SlabMesh* slabMesh;
-    int spheresNum;
+    //MyCGAL::Primitives::BVHAccel<double>* tree;
 };
 
-
-}
 #endif

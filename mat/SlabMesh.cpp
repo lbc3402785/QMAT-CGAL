@@ -1,6 +1,7 @@
 #include "SlabMesh.h"
 #include <CGAL/Surface_mesh.h>
 #include <CGAL/Polygon_mesh_processing/compute_normal.h>
+#include <CGAL/Triangle_3.h>
 #include "geometry/Search/Sphere.h"
 
 #include "geometry/Search/Cone.h"
@@ -107,102 +108,11 @@ MyCGAL::Primitives::BVHAccel<double>* SlabMesh::constructBVH()
     return bvh;
 }
 
-void SlabMesh::optimize()
-{
-    //prepare triangle mesh data
-    int counter=0;
-    for ( Surface_mesh::Vertex_iterator it = surface_mesh.vertices_begin (); it != surface_mesh.vertices_end (); ++it ) {
-        it->id () = counter;
-        counter++;
-    }
-    //torch::Tensor tn0=torch::zeros({static_cast<long long>(surface_mesh.size_of_vertices()),3});
-    std::map<face_descriptor,Vector> fnormals;
-    std::map<vertex_descriptor,Vector> vnormals;
-    CGAL::Polygon_mesh_processing::compute_normals(surface_mesh,
-                                                   boost::make_assoc_property_map(vnormals),
-                                                   boost::make_assoc_property_map(fnormals));
-
-    //prepare medial axis data
-    torch::Tensor v0=torch::zeros({static_cast<long long>(vertices.size()),3});
-    torch::Tensor r0=torch::zeros({static_cast<long long>(vertices.size()),1});
-    for(int i=0;i<vertices.size();i++){
-        v0[i][0]=vertices[i].second->sphere.center.X();
-        v0[i][1]=vertices[i].second->sphere.center.Y();
-        v0[i][2]=vertices[i].second->sphere.center.Z();
-        r0[i][0]=vertices[i].second->sphere.radius;
-    }
-    torch::Tensor eids=torch::zeros({static_cast<long long>(edges.size()),2},torch::TensorOptions(torch::kLong));
-    for(int i=0;i<edges.size();i++){
-        eids[i][0]=static_cast<long long>(edges[i].second->vertices_.first);
-        eids[i][1]=static_cast<long long>(edges[i].second->vertices_.second);
-    }
-
-
-
-    torch::Tensor e0=v0.index_select(0,eids.select(1,0))-v0.index_select(0,eids.select(1,1));
-    torch::Tensor d0=r0.index_select(0,eids.select(1,0))-r0.index_select(0,eids.select(1,1));
-    v0.set_requires_grad(true);
-    r0.set_requires_grad(true);
-    std::vector<torch::Tensor> parameters;
-    parameters.push_back(v0);
-    parameters.push_back(r0);
-    // 定义均方误差损失函数
-    torch::nn::MSELoss loss_fn;
-    DistToBoundaryLoss distLoss(tree);
-    torch::optim::Adam optimizer(parameters, torch::optim::AdamOptions(0.28).betas({0.9, 0.5}));
-    int times=0;
-    while(times<60){
-        torch::Tensor el=v0.index_select(0,eids.select(1,0))-v0.index_select(0,eids.select(1,1));
-        torch::Tensor loss=distLoss.forward(this,v0,r0)+0.1*loss_fn(e0,el);
-        optimizer.zero_grad();
-        loss.backward();
-        optimizer.step();
-        if(times % 5 == 0)
-        {
-            std::cout<<times<<"th total mean loss:"<<std::setprecision(6)<<loss.item().toFloat()<<std::endl;
-        }
-        times++;
-    }
-    e0=v0.detach().index_select(0,eids.select(1,0))-v0.detach().index_select(0,eids.select(1,1));
-    //step 2
-    PointToMatLoss pointToMatLoss;
-    times=0;
-    double lossVal = 1000.0;
-    while(times<600&& lossVal>1e-3){
-
-        torch::Tensor el=v0.index_select(0,eids.select(1,0))-v0.index_select(0,eids.select(1,1));
-        torch::Tensor surface2MatLoss = pointToMatLoss.forward(this, v0,r0, surface_mesh);
-        torch::Tensor mat2SurfaceLoss=distLoss.forward(this,v0,r0);
-        torch::Tensor loss=surface2MatLoss+0.2*mat2SurfaceLoss+0.1*loss_fn(e0,el);
-        optimizer.zero_grad();
-        loss.backward();
-        optimizer.step();
-        lossVal = loss.item().toDouble();
-        if(times % 10 == 0)
-        {
-            std::cout<<times<<"th surface2MatLoss mean loss:"<<std::setprecision(6)<<surface2MatLoss.item().toDouble()<<std::endl;
-            std::cout<<times<<"th mat2SurfaceLoss mean loss:"<<std::setprecision(6)<<mat2SurfaceLoss.item().toDouble()<<std::endl;
-            std::cout<<times<<"th total mean loss:"<<std::setprecision(6)<< lossVal <<std::endl;
-        }
-        times++;
-    }
-
-    torch::Tensor vn=v0.detach();
-    torch::Tensor rn = r0.detach();
-    for(int i=0;i<vertices.size();i++){
-        vertices[i].second->sphere.center.X()= vn[i][0].item().toDouble();
-        vertices[i].second->sphere.center.Y()= vn[i][1].item().toDouble();
-        vertices[i].second->sphere.center.Z()= vn[i][2].item().toDouble();
-        vertices[i].second->sphere.radius= r0[i][0].item().toDouble();
-    }
-    update();
-    project();
-}
 
 void SlabMesh::project()
 {
     if(bvh==nullptr)return;
-    projectionMap.clear();
+    surface2Mat.clear();
     int counter = 0;
     for (Surface_mesh::Vertex_iterator it = surface_mesh.vertices_begin(); it != surface_mesh.vertices_end(); ++it) {
         it->id() = counter;
@@ -219,12 +129,41 @@ void SlabMesh::project()
             MyCGAL::Primitives::Vector3d nearest=std::get<1>(result);
 #pragma omp critical
             {
-                projectionMap[vd->id()]=std::make_pair(Point(nearest.x(),nearest.y(),nearest.z()),std::get<2>(result));
+                surface2Mat[vd->id()]=std::make_pair(Point(nearest.x(),nearest.y(),nearest.z()),std::get<2>(result));
             }
         }
         //}
     }
 }
+
+//void SlabMesh::inverseProject()
+//{
+//    if(tree==nullptr)return;
+//#pragma omp parallel for
+//    for(int i=0;i<vertices.size();i++){
+//        if(vertices[i].first){
+////            Point p(vertices[i].second->sphere.center.X(),vertices[i].second->sphere.center.Y(),vertices[i].second->sphere.center.Z());
+////            Point_and_primitive_id pp=tree->closest_point_and_primitive(p);
+////            Point closest_point = pp.first;
+////            Point_and_primitive_id pp2=tree->closest_point_and_primitive(p,pp);
+////            Point closest_point2 = pp2.first;
+//            MyCGAL::Primitives::Vector3d p(vertices[i].second->sphere.center.X(),vertices[i].second->sphere.center.Y(),vertices[i].second->sphere.center.Z());
+//            std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3d,double> result=tree->nearest(p);
+//            MyCGAL::Primitives::Object<double>* obj=std::get<0>(result);
+//            MyCGAL::Primitives::Vector3d closest_point=std::get<1>(result);
+//            std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3d,double> result1=tree->nearestExclue(p,{obj});
+//            MyCGAL::Primitives::Vector3d closest_point1=std::get<1>(result1);
+//            MyCGAL::Primitives::Object<double>* obj1=std::get<0>(result1);
+//            std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3d,double> result2=tree->nearestExclue(p,{obj,obj1});
+//            MyCGAL::Primitives::Vector3d closest_point2=std::get<1>(result2);
+//#pragma omp critical
+//            {
+////                mat2Surface[p]=std::make_pair(closest_point,dst);
+//                mat2Surface[p]=std::make_pair(closest_point,closest_point2);
+//            }
+//        }
+//    }
+//}
 
 void SlabMesh::update()
 {
@@ -3487,58 +3426,136 @@ void SlabMesh::InitialTopologyProperty() {
         }
     }
 }
-at::Tensor DistToBoundaryLoss::forward(SlabMesh *mesh, at::Tensor &v0, at::Tensor &r0)
+std::pair<at::Tensor,torch::Tensor> DistToBoundaryLoss::forward(SlabMesh *mesh,std::map<face_descriptor,Vector> fnormals, at::Tensor &v0, at::Tensor &r0)
 {
+    //    std::map<Point,std::pair<Point,Point>> tmp;
+    std::map<MyCGAL::Primitives::Vector3d,std::pair<MyCGAL::Primitives::Vector3d,MyCGAL::Primitives::Vector3d>> tmp;
     torch::Tensor sum=torch::zeros({1},torch::kDouble);
+    torch::Tensor normalLoss=torch::zeros({1},torch::kDouble);
     int count=0;
-#pragma omp parallel for
-    for(int i=0;i<mesh->vertices.size();i++){
-        if(mesh->vertices[i].first){
-            Point p(v0[i][0].item<double>(),v0[i][1].item<double>(),v0[i][2].item<double>());
-            Point_and_primitive_id pp=tree->closest_point_and_primitive(p);
-            Point closest_point = pp.first;
-#pragma omp critical
-            {
-                torch::Tensor v=v0[i]-torch::tensor({closest_point.x(),closest_point.y(),closest_point.z()});
-                sum+=(v.norm()-r0[i]).square()*0.5;
-                count++;
+    int normalCount=0;
+    torch::Tensor pointLoss=torch::zeros({1},torch::kDouble);
+    torch::Tensor pointNormalLoss=torch::zeros({1},torch::kDouble);
+    int pointCount=0;
+    int pointNormalCount=0;
+    torch::Tensor edgeLoss=torch::zeros({1},torch::kDouble);
+    torch::Tensor edgeNormalLoss=torch::zeros({1},torch::kDouble);
+    int edgeCount=0;
+    int edgeNormalCount=0;
+    torch::Tensor faceLoss=torch::zeros({1},torch::kDouble);
+    torch::Tensor faceNormalLoss=torch::zeros({1},torch::kDouble);
+    int faceCount=0;
+    int faceNormalCount=0;
+#pragma omp parallel sections
+    {
+#pragma omp section
+        {
+
+#pragma omp parallel for reduction(+:pointLoss)  reduction(+: pointCount)
+            for(int i=0;i<mesh->vertices.size();i++){
+                if(mesh->vertices[i].first){
+                    Point p(v0[i][0].item<double>(),v0[i][1].item<double>(),v0[i][2].item<double>());
+                    Point_and_primitive_id pp=tree->closest_point_and_primitive(p);
+                    Point closest_point = pp.first;
+                    Primitive::Id fid = pp.second;
+//                    auto t = CGAL::Triangle_3<simple_kernel>(fid->halfedge()->vertex()->point(),
+//                                                             fid->halfedge()->next()->vertex()->point(),
+//                                                             fid->halfedge()->next()->next()->vertex()->point());
+//                    bool on=t.has_on(closest_point);
+                    torch::Tensor fv=torch::tensor({fnormals[fid].x(),fnormals[fid].y(),fnormals[fid].z()});
+                    {
+                        torch::Tensor v=torch::tensor({closest_point.x(),closest_point.y(),closest_point.z()})-v0[i];
+                        pointLoss+=(v.norm()-r0[i]).square();
+                        //if(on){
+                            v=torch::nn::functional::normalize(v, torch::nn::functional::NormalizeFuncOptions().p(2).dim(0));
+                            pointNormalLoss+=(fv-v).square().sum();
+                            pointNormalCount++;
+                        //}
+                        pointCount++;
+                    }
+                }
+            }
+        }
+#pragma omp section
+        {
+#pragma omp parallel for reduction(+:edgeLoss)  reduction(+: edgeCount)
+            for(unsigned int i=0;i<mesh->edges.size();i++){
+                unsigned int i0=mesh->edges[i].second->vertices_.first;
+                unsigned int i1=mesh->edges[i].second->vertices_.second;
+                torch::Tensor c=(v0[i0]+v0[i1])*0.5;
+                torch::Tensor r=(r0[i0]+r0[i1])*0.5;
+                Point p(c[0].item<double>(),c[1].item<double>(),c[2].item<double>());
+                Point_and_primitive_id pp=tree->closest_point_and_primitive(p);
+                Point closest_point = pp.first;
+                Primitive::Id fid = pp.second;
+//                auto t = CGAL::Triangle_3<simple_kernel>(fid->halfedge()->vertex()->point(),
+//                                                         fid->halfedge()->next()->vertex()->point(),
+//                                                         fid->halfedge()->next()->next()->vertex()->point());
+//                bool on=t.has_on(closest_point);
+                torch::Tensor fv=torch::tensor({fnormals[fid].x(),fnormals[fid].y(),fnormals[fid].z()});
+
+                {
+                    torch::Tensor v=torch::tensor({closest_point.x(),closest_point.y(),closest_point.z()})-c;
+                    edgeLoss+=(v.norm()-r).square();
+                    //if(on){
+                        v=torch::nn::functional::normalize(v, torch::nn::functional::NormalizeFuncOptions().p(2).dim(0));
+                        edgeNormalLoss+= (fv-v).square().sum();
+                        edgeNormalCount++;
+                    //}
+
+                    edgeCount++;
+                }
+            }
+        }
+#pragma omp section
+        {
+
+#pragma omp parallel for reduction(+:faceLoss)  reduction(+: faceCount)
+            for(unsigned int i=0;i<mesh->faces.size();i++){
+                std::vector<unsigned int> vids(mesh->faces[i].second->vertices_.begin(),mesh->faces[i].second->vertices_.end());
+                unsigned int i0=vids[0];
+                unsigned int i1=vids[1];
+                unsigned int i2=vids[2];
+                torch::Tensor c=(v0[i0]+v0[i1]+v0[i2])/3.0;
+                torch::Tensor r=(r0[i0]+r0[i1]+r0[i2])/3.0;
+                Point p(c[0].item<double>(),c[1].item<double>(),c[2].item<double>());
+                Point_and_primitive_id pp=tree->closest_point_and_primitive(p);
+
+                Point closest_point = pp.first;
+                Primitive::Id fid = pp.second;
+
+//                auto t = CGAL::Triangle_3<simple_kernel>(fid->halfedge()->vertex()->point(),
+//                                                         fid->halfedge()->next()->vertex()->point(),
+//                                                         fid->halfedge()->next()->next()->vertex()->point());
+//                bool on=t.has_on(closest_point);
+
+                torch::Tensor fv=torch::tensor({fnormals[fid].x(),fnormals[fid].y(),fnormals[fid].z()});
+
+                {
+                    torch::Tensor v=torch::tensor({closest_point.x(),closest_point.y(),closest_point.z()})-c;
+                    faceLoss+=(v.norm()-r).square();
+                    //if(on){
+                        v=torch::nn::functional::normalize(v, torch::nn::functional::NormalizeFuncOptions().p(2).dim(0));
+                        faceNormalLoss+= (fv-v).square().sum();
+                        faceNormalCount++;
+                    //}
+                    faceCount++;
+                }
             }
         }
     }
-    for(unsigned int i=0;i<mesh->edges.size();i++){
-        unsigned int i0=mesh->edges[i].second->vertices_.first;
-        unsigned int i1=mesh->edges[i].second->vertices_.second;
-        torch::Tensor c=(v0[i0]+v0[i1])*0.5;
-        torch::Tensor r=(r0[i0]+r0[i1])*0.5;
-        Point p(c[0].item<double>(),c[1].item<double>(),c[2].item<double>());
-        Point_and_primitive_id pp=tree->closest_point_and_primitive(p);
-        Point closest_point = pp.first;
-#pragma omp critical
-        {
-            torch::Tensor v=c-torch::tensor({closest_point.x(),closest_point.y(),closest_point.z()});
-            sum+=(v.norm()-r).square()*2;
-            count++;
-        }
+
+    sum = pointLoss + edgeLoss + faceLoss;
+    normalLoss=pointNormalLoss+edgeNormalLoss+faceNormalLoss;
+    count=pointCount+edgeCount+faceCount;
+    normalCount=pointNormalCount+edgeNormalCount+faceNormalCount;
+    if(count>0){
+        sum/=count;
     }
-    for(unsigned int i=0;i<mesh->faces.size();i++){
-        std::vector<unsigned int> vids(mesh->faces[i].second->vertices_.begin(),mesh->faces[i].second->vertices_.end());
-        unsigned int i0=vids[0];
-        unsigned int i1=vids[1];
-        unsigned int i2=vids[2];
-        torch::Tensor c=(v0[i0]+v0[i1]+v0[i2])/3.0;
-        torch::Tensor r=(r0[i0]+r0[i1]+r0[i2])/3.0;
-        Point p(c[0].item<double>(),c[1].item<double>(),c[2].item<double>());
-        Point_and_primitive_id pp=tree->closest_point_and_primitive(p);
-        Point closest_point = pp.first;
-#pragma omp critical
-        {
-            torch::Tensor v=c-torch::tensor({closest_point.x(),closest_point.y(),closest_point.z()});
-            sum+=(v.norm()-r).square()*3;
-            count++;
-        }
+    if(normalCount>0){
+        normalLoss/=normalCount;
     }
-    if(count>0)sum/count;
-    return sum;
+    return std::make_pair(sum,normalLoss);
 }
 MyCGAL::Primitives::BVHAccel<double> *PointToMatLoss::constructBVH(SlabMesh *mesh, at::Tensor vn,torch::Tensor rn)
 {
@@ -3656,152 +3673,273 @@ at::Tensor PointToMatLoss::forward(SlabMesh *mesh,torch::Tensor& vm,torch::Tenso
     if (torch::isinf(rm).any().item<bool>()) {
         std::cerr << "rm contains Inf values!" << std::endl;
     }
+    int count = 0;
+    torch::Tensor pointLoss = torch::zeros({ 1 }, torch::kDouble);
+    int pointCount = 0;
+    torch::Tensor edgeLoss = torch::zeros({ 1 }, torch::kDouble);
+    int edgeCount = 0;
+    torch::Tensor faceLoss = torch::zeros({ 1 }, torch::kDouble);
+    int faceCount = 0;
     MyCGAL::Primitives::BVHAccel<double>*bvh=constructBVH(mesh,vm.detach(),rm.detach());
     torch::Tensor sum=torch::zeros({1},torch::kDouble);
 
-    int count=0;
-#pragma omp parallel for
-    for(vertex_descriptor vd: CGAL::vertices(surface_mesh)){
-        MyCGAL::Primitives::Vector3d point(vd->point().x(),vd->point().y(),vd->point().z());
-        std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double> result=bvh->nearest(point);
-        MyCGAL::Primitives::Object<double>*obj=std::get<0>(result);
 
-        if(obj){
-            torch::Tensor tp=torch::tensor({point.x(),point.y(),point.z()});
-            MyCGAL::Primitives::Vector3d p=std::get<1>(result);
-            double signedDist=std::get<2>(result);
-            torch::Tensor c;
-            torch::Tensor r;
-            switch (obj->ObjectType) {
-            case 1:{
+#pragma omp parallel sections
+    {
+#pragma omp section
+        {
+#pragma omp parallel for reduction(+:pointLoss)  reduction(+: pointCount)
+            for(vertex_descriptor vd: CGAL::vertices(surface_mesh)){
+                MyCGAL::Primitives::Vector3d point(vd->point().x(),vd->point().y(),vd->point().z());
+                std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double> result=bvh->nearest(point);
+                MyCGAL::Primitives::Object<double>*obj=std::get<0>(result);
+                MyCGAL::Primitives::Vector3d p=std::get<1>(result);
+                //torch::Tensor fp = torch::tensor({ p.x(),p.y(),p.z() });
+                if(obj){
+                    torch::Tensor tp=torch::tensor({point.x(),point.y(),point.z()});
+                    MyCGAL::Primitives::Vector3d p=std::get<1>(result);
+                    //torch::Tensor fp = torch::tensor({ p.x(),p.y(),p.z() });
+                    double signedDist=std::get<2>(result);
+                    torch::Tensor c;
+                    torch::Tensor r;
+                    switch (obj->ObjectType) {
+                    case 1:{
 
-                MyCGAL::Primitives::Triangle<double>* tri=static_cast<MyCGAL::Primitives::Triangle<double>*>(obj);
-                std::array<double,3> baryCentric=tri->getBarycentrics(p);
+                        MyCGAL::Primitives::Triangle<double>* tri=static_cast<MyCGAL::Primitives::Triangle<double>*>(obj);
+                        std::array<double,3> baryCentric=tri->getBarycentrics(p);
 
-                unsigned int i0=tri->v0.id;
-                unsigned int i1=tri->v1.id;
-                unsigned int i2=tri->v2.id;
-                c=vm[i0]*baryCentric[0]+vm[i1]*baryCentric[1]+vm[i2]*baryCentric[2];
-                r=rm[i0]*baryCentric[0]+rm[i1]*baryCentric[1]+rm[i2]*baryCentric[2];
-                break;
-            }
-            case 2:{
-                MyCGAL::Primitives::Sphere<double>* sphere=static_cast<MyCGAL::Primitives::Sphere<double>*>(obj);
-                c=vm[sphere->id];//{3}
-                r=rm[sphere->id];//{1}
-                break;
-            }
-            case 3:{
-                MyCGAL::Primitives::Cone<double>* cone=static_cast<MyCGAL::Primitives::Cone<double>*>(obj);
-                unsigned int i0=mesh->edges[cone->id].second->vertices_.first;
-                unsigned int i1=mesh->edges[cone->id].second->vertices_.second;
+                        unsigned int i0=tri->v0.id;
+                        unsigned int i1=tri->v1.id;
+                        unsigned int i2=tri->v2.id;
+                        c=vm[i0]*baryCentric[0]+vm[i1]*baryCentric[1]+vm[i2]*baryCentric[2];
+                        r=rm[i0]*baryCentric[0]+rm[i1]*baryCentric[1]+rm[i2]*baryCentric[2];
+                        break;
+                    }
+                    case 2:{
+                        MyCGAL::Primitives::Sphere<double>* sphere=static_cast<MyCGAL::Primitives::Sphere<double>*>(obj);
+                        c=vm[sphere->id];//{3}
+                        r=rm[sphere->id];//{1}
+                        break;
+                    }
+                    case 3:{
+                        MyCGAL::Primitives::Cone<double>* cone=static_cast<MyCGAL::Primitives::Cone<double>*>(obj);
+                        unsigned int i0=mesh->edges[cone->id].second->vertices_.first;
+                        unsigned int i1=mesh->edges[cone->id].second->vertices_.second;
+                        std::array<double,2> baryCentric=cone->getBarycentrics(p);
+                        c=vm[i0]*baryCentric[0]+vm[i1]*baryCentric[1];
+                        r=rm[i0]*baryCentric[0]+rm[i1]*baryCentric[1];
+                        break;
+                    }
 
-                double r0=rm[i0].item<double>();
-                double r1=rm[i1].item<double>();
-                double radius=(p-cone->apex).norm()*std::sqrt((1-cone->cosThetaSqr)/cone->cosThetaSqr);//||p-apex||*\tan{\phi/2};
-                double w0=(radius-r1)/(r0-r1);//radius=w0*(r0-r1)+r1=w0*r0+w1*r1
-                double w1=1.0-w0;
-                c=vm[i0]*w0+vm[i1]*w1;
-                r=rm[i0]*w0+rm[i1]*w1;
-                break;
-            }
+                    }
+                    torch::Tensor v=tp-c;//center-->target
+                    //torch::Tensor vn = fp - c;
+                    //std::cout<< torch::nn::functional::normalize(v, torch::nn::functional::NormalizeFuncOptions().p(2).dim(0))<<std::endl;
+                    //std::cout << torch::nn::functional::normalize(vn, torch::nn::functional::NormalizeFuncOptions().p(2).dim(0)) << std::endl;
+                    {
+                        torch::Tensor x2=(v.norm()-r).square();
+                        //torch::Tensor x=x2.sqrt();
+                        if(std::abs(signedDist)>10){
+                            std::cout<<v<<std::endl;
+                        }
+                        if (x2.item<double>() > 100) {
+                            std::cout << x2 << std::endl;
+                            std::cout << torch::exp(0.01 * x2) * x2 << std::endl;
+                            torch::Tensor fp = torch::tensor({ p.x(),p.y(),p.z() });
+                            torch::Tensor vn = fp - c;//center-->nearest
+                            std::cout << v.norm() << std::endl;
+                            std::cout << c << std::endl;
+                            std::cout << r << std::endl;
+                            std::cout << vn.norm() << std::endl;
+                            std::cout << (point - p).squaredNorm() << std::endl;
+                            std::cout << torch::nn::functional::normalize(v, torch::nn::functional::NormalizeFuncOptions().p(2).dim(0)) << std::endl;
+                            std::cout << torch::nn::functional::normalize(vn, torch::nn::functional::NormalizeFuncOptions().p(2).dim(0)) << std::endl;
+                        }
+                        if(signedDist<0){
+                            //sum+=0.5*(1-torch::tanh(-x));
+                            pointLoss+=torch::exp(0.01*x2)*x2;
+                        }else{
+                            pointLoss+=x2;
+                        }
+                        pointCount++;
+                        /*if (pointLoss.item<double>() > 10000) {
+                            std::cout << pointLoss << std::endl;
+                        }*/
+                    }
 
-            }
-            torch::Tensor v=tp-c;
-#pragma omp critical
-            {
-                torch::Tensor x2=(v.norm()-r).square();
-                //torch::Tensor x=x2.sqrt();
-                if(signedDist<0){
-                    //sum+=0.5*(1-torch::tanh(-x));
-                    sum+100*x2;
-                }else{
-                    sum+=x2;
                 }
-                //                if(x.item<double>()<1.0){
-                //                    sum+=x2*0.5;
-                //                }else{
-                //                    sum+=(x-0.5);
-                //                }
+            }
+        }
 
-                count++;
+#pragma omp section
+        {
+#pragma omp parallel for reduction(+:edgeLoss)  reduction(+: edgeCount)
+            for(edge_descriptor ed: CGAL::edges(surface_mesh)){
+                Point p0=ed.halfedge()->vertex()->point();
+                Point p1=ed.halfedge()->next()->vertex()->point();
+                Point p((p0.x()+p1.x())/2.0,(p0.y()+p1.y())/2.0,(p0.z()+p1.z())/2.0);
+                torch::Tensor fp = torch::tensor({ p.x(),p.y(),p.z() });
+                MyCGAL::Primitives::Vector3d point(p.x(),p.y(),p.z());
+                std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double> result=bvh->nearest(point);
+                MyCGAL::Primitives::Object<double>*obj=std::get<0>(result);
+
+                if(obj){
+                    torch::Tensor tp=torch::tensor({point.x(),point.y(),point.z()});
+                    MyCGAL::Primitives::Vector3d p=std::get<1>(result);
+                    double signedDist=std::get<2>(result);
+                    torch::Tensor c;
+                    torch::Tensor r;
+                    switch (obj->ObjectType) {
+                    case 1:{
+
+                        MyCGAL::Primitives::Triangle<double>* tri=static_cast<MyCGAL::Primitives::Triangle<double>*>(obj);
+                        std::array<double,3> baryCentric=tri->getBarycentrics(p);
+
+                        unsigned int i0=tri->v0.id;
+                        unsigned int i1=tri->v1.id;
+                        unsigned int i2=tri->v2.id;
+                        c=vm[i0]*baryCentric[0]+vm[i1]*baryCentric[1]+vm[i2]*baryCentric[2];
+                        r=rm[i0]*baryCentric[0]+rm[i1]*baryCentric[1]+rm[i2]*baryCentric[2];
+                        break;
+                    }
+                    case 2:{
+                        MyCGAL::Primitives::Sphere<double>* sphere=static_cast<MyCGAL::Primitives::Sphere<double>*>(obj);
+                        c=vm[sphere->id];//{3}
+                        r=rm[sphere->id];//{1}
+                        break;
+                    }
+                    case 3:{
+                        MyCGAL::Primitives::Cone<double>* cone=static_cast<MyCGAL::Primitives::Cone<double>*>(obj);
+                        unsigned int i0=mesh->edges[cone->id].second->vertices_.first;
+                        unsigned int i1=mesh->edges[cone->id].second->vertices_.second;
+                        std::array<double,2> baryCentric=cone->getBarycentrics(p);
+                        c=vm[i0]*baryCentric[0]+vm[i1]*baryCentric[1];
+                        r=rm[i0]*baryCentric[0]+rm[i1]*baryCentric[1];
+                        break;
+                    }
+
+                    }
+                    torch::Tensor v=tp-c;
+                    {
+                        torch::Tensor x2=(v.norm()-r).square();
+                        //torch::Tensor x=x2.sqrt();
+                        if (std::abs(signedDist) > 10) {
+                            std::cout << v << std::endl;
+                        }
+                        if (x2.item<double>() > 100) {
+                            std::cout << x2 << std::endl;
+                            std::cout << torch::exp(0.01 * x2) * x2 << std::endl;
+                        }
+                        if(signedDist<0){
+                            //sum+=0.5*(1-torch::tanh(-x));
+                            edgeLoss+=torch::exp(0.01 * x2)*x2;
+                        }else{
+                            edgeLoss+=x2;
+                        }
+                        //                if(x.item<double>()<1.0){
+                        //                    sum+=x2*0.5;
+                        //                }else{
+                        //                    sum+=(x-0.5);
+                        //                }
+
+                        edgeCount++;
+                        /*if (edgeLoss.item<double>() > 10000) {
+                            std::cout << edgeLoss << std::endl;
+                        }*/
+                    }
+
+                }
+            }
+
+        }
+#pragma omp section
+        {
+#pragma omp parallel for reduction(+:faceLoss)  reduction(+: faceCount)
+            for(face_descriptor fd: CGAL::faces(surface_mesh)){
+                Point p0=fd->halfedge()->vertex()->point();
+                Point p1=fd->halfedge()->next()->vertex()->point();
+                Point p2=fd->halfedge()->next()->next()->vertex()->point();
+                Point p((p0.x()+p1.x()+p2.x())/3.0,(p0.y()+p1.y()+p2.y())/3.0,(p0.z()+p1.z()+p2.z())/3.0);
+                torch::Tensor fp = torch::tensor({ p.x(),p.y(),p.z() });
+                MyCGAL::Primitives::Vector3d point(p.x(),p.y(),p.z());
+                std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double> result=bvh->nearest(point);
+                MyCGAL::Primitives::Object<double>*obj=std::get<0>(result);
+
+                if(obj){
+                    torch::Tensor tp=torch::tensor({point.x(),point.y(),point.z()});
+                    MyCGAL::Primitives::Vector3d p=std::get<1>(result);
+                    double signedDist=std::get<2>(result);
+                    torch::Tensor c;
+                    torch::Tensor r;
+                    switch (obj->ObjectType) {
+                    case 1:{
+
+                        MyCGAL::Primitives::Triangle<double>* tri=static_cast<MyCGAL::Primitives::Triangle<double>*>(obj);
+                        std::array<double,3> baryCentric=tri->getBarycentrics(p);
+
+                        unsigned int i0=tri->v0.id;
+                        unsigned int i1=tri->v1.id;
+                        unsigned int i2=tri->v2.id;
+                        c=vm[i0]*baryCentric[0]+vm[i1]*baryCentric[1]+vm[i2]*baryCentric[2];
+                        r=rm[i0]*baryCentric[0]+rm[i1]*baryCentric[1]+rm[i2]*baryCentric[2];
+                        break;
+                    }
+                    case 2:{
+                        MyCGAL::Primitives::Sphere<double>* sphere=static_cast<MyCGAL::Primitives::Sphere<double>*>(obj);
+                        c=vm[sphere->id];//{3}
+                        r=rm[sphere->id];//{1}
+                        break;
+                    }
+                    case 3:{
+                        MyCGAL::Primitives::Cone<double>* cone=static_cast<MyCGAL::Primitives::Cone<double>*>(obj);
+                        unsigned int i0=mesh->edges[cone->id].second->vertices_.first;
+                        unsigned int i1=mesh->edges[cone->id].second->vertices_.second;
+                        std::array<double,2> baryCentric=cone->getBarycentrics(p);
+                        c=vm[i0]*baryCentric[0]+vm[i1]*baryCentric[1];
+                        r=rm[i0]*baryCentric[0]+rm[i1]*baryCentric[1];
+                        break;
+                    }
+
+                    }
+                    torch::Tensor v=tp-c;
+                    {
+                        torch::Tensor x2=(v.norm()-r).square();
+                        //torch::Tensor x=x2.sqrt();
+                        if (std::abs(signedDist) > 10) {
+                            std::cout << v << std::endl;
+                        }
+                        if (x2.item<double>() > 100) {
+                            std::cout << x2 << std::endl;
+                            std::cout << torch::exp(0.01 * x2) * x2 << std::endl;
+                        }
+                        if(signedDist<0){
+                            //sum+=0.5*(1-torch::tanh(-x));
+                            faceLoss+=torch::exp(0.01 * x2)*x2;
+                        }else{
+                            faceLoss+=x2;
+                        }
+                        //                if(x.item<double>()<1.0){
+                        //                    sum+=x2*0.5;
+                        //                }else{
+                        //                    sum+=(x-0.5);
+                        //                }
+
+                        faceCount++;
+                        /*if (faceLoss.item<double>() > 10000) {
+                            std::cout << faceLoss << std::endl;
+                        }*/
+                    }
+
+                }
             }
 
         }
     }
-#pragma omp parallel for
-    for(face_descriptor fd: CGAL::faces(surface_mesh)){
-        Point p0=fd->halfedge()->vertex()->point();
-        Point p1=fd->halfedge()->next()->vertex()->point();
-        Point p2=fd->halfedge()->next()->next()->vertex()->point();
-        Point p((p0.x()+p1.x()+p2.x())/3.0,(p0.y()+p1.y()+p2.y())/3.0,(p0.z()+p1.z()+p2.z())/3.0);
-        MyCGAL::Primitives::Vector3d point(p.x(),p.y(),p.z());
-        std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double> result=bvh->nearest(point);
-        MyCGAL::Primitives::Object<double>*obj=std::get<0>(result);
 
-        if(obj){
-            torch::Tensor tp=torch::tensor({point.x(),point.y(),point.z()});
-            MyCGAL::Primitives::Vector3d p=std::get<1>(result);
-            double signedDist=std::get<2>(result);
-            torch::Tensor c;
-            torch::Tensor r;
-            switch (obj->ObjectType) {
-            case 1:{
 
-                MyCGAL::Primitives::Triangle<double>* tri=static_cast<MyCGAL::Primitives::Triangle<double>*>(obj);
-                std::array<double,3> baryCentric=tri->getBarycentrics(p);
 
-                unsigned int i0=tri->v0.id;
-                unsigned int i1=tri->v1.id;
-                unsigned int i2=tri->v2.id;
-                c=vm[i0]*baryCentric[0]+vm[i1]*baryCentric[1]+vm[i2]*baryCentric[2];
-                r=rm[i0]*baryCentric[0]+rm[i1]*baryCentric[1]+rm[i2]*baryCentric[2];
-                break;
-            }
-            case 2:{
-                MyCGAL::Primitives::Sphere<double>* sphere=static_cast<MyCGAL::Primitives::Sphere<double>*>(obj);
-                c=vm[sphere->id];//{3}
-                r=rm[sphere->id];//{1}
-                break;
-            }
-            case 3:{
-                MyCGAL::Primitives::Cone<double>* cone=static_cast<MyCGAL::Primitives::Cone<double>*>(obj);
-                unsigned int i0=mesh->edges[cone->id].second->vertices_.first;
-                unsigned int i1=mesh->edges[cone->id].second->vertices_.second;
-
-                double r0=rm[i0].item<double>();
-                double r1=rm[i1].item<double>();
-                double radius=(p-cone->apex).norm()*std::sqrt((1-cone->cosThetaSqr)/cone->cosThetaSqr);//||p-apex||*\tan{\phi/2};
-                double w0=(radius-r1)/(r0-r1);//radius=w0*(r0-r1)+r1=w0*r0+w1*r1
-                double w1=1.0-w0;
-                c=vm[i0]*w0+vm[i1]*w1;
-                r=rm[i0]*w0+rm[i1]*w1;
-                break;
-            }
-
-            }
-            torch::Tensor v=tp-c;
-#pragma omp critical
-            {
-                torch::Tensor x2=(v.norm()-r).square();
-                //torch::Tensor x=x2.sqrt();
-                if(signedDist<0){
-                    //sum+=0.5*(1-torch::tanh(-x));
-                    sum+100*x2;
-                }else{
-                    sum+=x2;
-                }
-                //                if(x.item<double>()<1.0){
-                //                    sum+=x2*0.5;
-                //                }else{
-                //                    sum+=(x-0.5);
-                //                }
-
-                count++;
-            }
-
-        }
-    }
+    sum = pointLoss + edgeLoss + faceLoss;
+    count=pointCount+edgeCount+faceCount;
     if(count>0)sum/=count;
     delete bvh;
     return sum;
@@ -3814,19 +3952,6 @@ at::Tensor PointToMatLoss::projectOnSphere(at::Tensor &c, at::Tensor &r, at::Ten
     at::Tensor fp = c + r * ncp;
     return fp;
 }
-namespace fitting {
-bool SphereCost::operator()(double const* const* params, double *residual) const
-{
-    for(int id=0;id<spheresNum;id++){
-        Point center(params[id][0],params[id][1],params[id][2]);
-        double radius=params[id][3];
-        Point_and_primitive_id pp=slabMesh->tree->closest_point_and_primitive(center);
-        Point closest_point = pp.first;
-        Vector v=(closest_point-center);
-        residual[id]=(std::sqrt(v.x()*v.x()+v.y()*v.y()+v.z()*v.z()))-radius;
-    }
-    return true;
-}
-}
+
 
 

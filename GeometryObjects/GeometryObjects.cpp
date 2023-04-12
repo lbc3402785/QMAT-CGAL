@@ -59,6 +59,7 @@ Cone::Cone(Wm4::Vector3d c0, double r0, Wm4::Vector3d c1, double r1)
 		double dr0r1 = fabs(r0-r1);
 		if(dr0r1 < 1e-8)
 		{
+            apex=c0;
             smallCenter = c0;
 			axis = c1-c0;
 			axis.Normalize();
