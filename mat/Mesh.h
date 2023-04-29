@@ -70,6 +70,7 @@ public:
     bool inside;//在网格内部
     int id;
     int tag;
+    bool is_boundary;//可能在网格外面
     bool is_pole;//四面体是否有效，暂时不用
     std::set<unsigned int> pole_bplist;//有效地四面体关联的有限点
     double dist_center_to_boundary; // approximate

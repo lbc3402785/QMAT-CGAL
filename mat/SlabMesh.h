@@ -3,6 +3,7 @@
 #undef slots
 #include <torch/torch.h>
 #define slots Q_SLOTS
+#include <CGAL/Polygon_mesh_processing/compute_normal.h>
 #include "PrimMesh.h"
 #include "geometry/Search/Triangle.h"
 #include "geometry/Search/BVH.h"
@@ -59,10 +60,13 @@ public:
     //MyCGAL::Primitives::BVHAccel<double>* tree;
     MyCGAL::Primitives::BVHAccel<double>* bvh;
     Surface_mesh surface_mesh;
-    std::map<unsigned,std::pair<Point,double>> surface2Mat;
-    //std::map<Point,std::pair<Point,Point>> mat2Surface;
-    //std::map<MyCGAL::Primitives::Vector3d,std::pair<MyCGAL::Primitives::Vector3d,MyCGAL::Primitives::Vector3d>> mat2Surface;
-
+    std::map<unsigned,std::pair<Point,double>> surface2MatMap;
+    std::map<Point,Point> mat2SurfaceMap;
+    //std::map<MyCGAL::Primitives::Vector3d,std::pair<MyCGAL::Primitives::Vector3d,MyCGAL::Primitives::Vector3d>> mat2SurfaceMap;
+    std::map<face_descriptor,Vector> fnormals;
+    std::map<vertex_descriptor,Vector> vnormals;
+public:
+     std::map<unsigned,std::pair<Point,double>> optimSurface2MatMap;
 public:
     SlabMesh():tree(nullptr),bvh(nullptr){
 
@@ -84,6 +88,10 @@ public:
             it->id() = counter;
             counter++;
         }
+
+        CGAL::Polygon_mesh_processing::compute_normals(this->surface_mesh,
+                                                       boost::make_assoc_property_map(vnormals),
+                                                       boost::make_assoc_property_map(fnormals));
         tree=new Tree(CGAL::faces(this->surface_mesh).first,CGAL::faces(this->surface_mesh).second, this->surface_mesh);
         tree->accelerate_distance_queries();
 //        std::vector<MyCGAL::Primitives::Object<double>*>objects;
@@ -99,6 +107,7 @@ public:
 //        }
 //        tree=new MyCGAL::Primitives::BVHAccel<double>(objects);
     }
+    void deleteWrongEdges();
     MyCGAL::Primitives::BVHAccel<double>* constructBVH();
 public:
     void project();
@@ -249,7 +258,7 @@ public:
     DistToBoundaryLoss(Tree* tree/*MyCGAL::Primitives::BVHAccel<double>* tree*/):tree(tree){
 
     }
-    std::pair<torch::Tensor,torch::Tensor> forward(SlabMesh *mesh,std::map<face_descriptor,Vector> fnormals,at::Tensor &v0,at::Tensor &r0);
+    std::pair<torch::Tensor,torch::Tensor> forward(SlabMesh *mesh,std::map<face_descriptor,Vector> fnormals,std::map<vertex_descriptor,Vector> vnormals,at::Tensor &v0,at::Tensor &r0);
 private:
     Tree* tree;
     //MyCGAL::Primitives::BVHAccel<double>* tree;

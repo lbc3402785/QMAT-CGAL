@@ -43,6 +43,10 @@ void ThreeDimensionalShape::ComputeInputNMM()
             fci->info().tag = -1;
             continue;
         }
+        Triangulation::Tetrahedron cell=pt->tetrahedron(fci);
+        double circumRadius=pt->TetCircumRadius(cell);
+        Point_t circumCenter=CGAL::circumcenter(cell);
+
         int onSurfaceCount = facetCount(fci);//统计四面体有几个边界面
 
         fci->info().tag = mas_vertex_count ++;
@@ -50,9 +54,8 @@ void ThreeDimensionalShape::ComputeInputNMM()
         bvp.first = true;
         bvp.second = new NonManifoldMesh_Vertex;
         (*bvp.second).isShow=false;
-        Triangulation::Tetrahedron cell=pt->tetrahedron(fci);
-        double circumRadius=pt->TetCircumRadius(cell);
-        Point_t circumCenter=CGAL::circumcenter(cell);
+
+
         double scribedRadius;
         Point_t scribed=pt->inscribeSphereCenter(pt->tetrahedron(fci),&scribedRadius);
         CGAL::Bounded_side side=cell.bounded_side(circumCenter);
@@ -122,6 +125,7 @@ void ThreeDimensionalShape::ComputeInputNMM()
         num_vor_v++;
     }
     input_nmm.avgRadius=sumRadius/num_vor_v;
+    std::map<int,bool> toDeleteEdges;
     for(Finite_facets_iterator_t ffi = pt->finite_facets_begin(); ffi != pt->finite_facets_end(); ffi ++)//两个对偶面入射四面体的球心构成一条中轴边
     {
         Triangulation::Object o = pt->dual(*ffi);
@@ -129,6 +133,10 @@ void ThreeDimensionalShape::ComputeInputNMM()
         {
             if( (ffi->first->info().inside == false) || (pt->mirror_facet(*ffi).first->info().inside == false) )
                 continue;
+            if( (ffi->first->info().is_boundary == true) || (pt->mirror_facet(*ffi).first->info().is_boundary == true) )
+            {
+                toDeleteEdges[input_nmm.numEdges]=true;
+            }
             if(!input_nmm.vertices[ffi->first->info().tag].first ||
                     !input_nmm.vertices[pt->mirror_facet(*ffi).first->info().tag].first){//add by me
                 continue;
@@ -159,6 +167,8 @@ void ThreeDimensionalShape::ComputeInputNMM()
                 all_finite_inside = false;
             else if(cc->info().inside == false)
                 all_finite_inside = false;
+            //            else if(cc->info().is_boundary == true)
+            //                all_finite_inside = false;
             //            else if (cc->info().tag == -1)//add by me
             //                all_finite_inside = false;
             vec_ch.push_back(cc++);
@@ -358,7 +368,11 @@ void ThreeDimensionalShape::ComputeInputNMM()
     //    }
     //}
 
-
+//    for(int i=0;i<input_nmm.edges.size();i++){
+//        if(toDeleteEdges.count(i)>0){
+//            input_nmm.DeleteEdge(i);
+//        }
+//    }
 
 
     input_nmm.Export(input_nmm.meshname);
@@ -512,9 +526,9 @@ void ThreeDimensionalShape::LoadInputNMM(std::string fname){
     /*slab_mesh.iniNumVertices = slab_mesh.numVertices;
     slab_mesh.iniNumEdges = slab_mesh.numEdges;
     slab_mesh.iniNumFaces = slab_mesh.numFaces;*/
-
-    slab_mesh.update();
     slab_mesh.constructTree(input.surface_mesh);
+    slab_mesh.deleteWrongEdges();
+    slab_mesh.update();
 }
 
 long ThreeDimensionalShape::PrepareSimplifySlabMesh()

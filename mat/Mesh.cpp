@@ -1,7 +1,7 @@
 #include "Mesh.h"
 #include <CGAL/Mesh_3/dihedral_angle_3.h>
 #include <CGAL/centroid.h>
-
+#include <CGAL/Polygon_mesh_processing/compute_normal.h>
 #include <Eigen/Dense>
 //Radius of the circumscribed sphere of the tetrahedron
 double Triangulation::TetCircumRadius(const Tetrahedron & tet)
@@ -1388,6 +1388,7 @@ void MPMesh::computedt()
         fci ++)
     {
         fci->info().id = fid ++;
+        fci->info().is_boundary=false;
         Point_t cent = CGAL::circumcenter(dt.tetrahedron(fci));
         //double scribedRadius;
         //Point_t scribed=dt.inscribeSphereCenter(dt.tetrahedron(fci),&scribedRadius);
@@ -1400,8 +1401,29 @@ void MPMesh::computedt()
         else{
             fci->info().inside = (domain->is_in_domain_object()(cent) > 0);//球心是否在整个域内
         }
+        if(fci->info().inside){
+            Triangulation::Tetrahedron cell=dt.tetrahedron(fci);
+            Point_t circumCenter=CGAL::circumcenter(cell);
+            bool allOutSide=true;
+            for (unsigned k = 0; k < 4; k++) {
+                Point_t p=fci->vertex(k)->point();
+                int id=fci->vertex(k)->info().id;
+                Vertex_handle v = vertices_begin();
+                std::advance(v, id);
+                Vector_3 n =v->normal;
+                Vector_3 cp(p.x()-circumCenter.x(),p.y()-circumCenter.y(),p.z()-circumCenter.z());
+                double dot=n*cp;
+                if(dot<0) fci->info().is_boundary=true;
+                if(dot>0){
+                    allOutSide = false;
+                }
+            }
+            if(allOutSide) fci->info().inside = false;
+        }
     }
 }
+
+
 
 void MPMesh::computesimpledt()
 {
