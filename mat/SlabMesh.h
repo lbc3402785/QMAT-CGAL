@@ -3,6 +3,7 @@
 #undef slots
 #include <torch/torch.h>
 #define slots Q_SLOTS
+#include <CGAL/bounding_box.h>
 #include <CGAL/Polygon_mesh_processing/compute_normal.h>
 #include "PrimMesh.h"
 #include "geometry/Search/Triangle.h"
@@ -60,6 +61,7 @@ public:
     //MyCGAL::Primitives::BVHAccel<double>* tree;
     MyCGAL::Primitives::BVHAccel<double>* bvh;
     Surface_mesh surface_mesh;
+    double diag;
     std::map<unsigned,std::pair<Point,double>> surface2MatMap;
     std::map<Point,Point> mat2SurfaceMap;
     //std::map<MyCGAL::Primitives::Vector3d,std::pair<MyCGAL::Primitives::Vector3d,MyCGAL::Primitives::Vector3d>> mat2SurfaceMap;
@@ -94,6 +96,13 @@ public:
                                                        boost::make_assoc_property_map(fnormals));
         tree=new Tree(CGAL::faces(this->surface_mesh).first,CGAL::faces(this->surface_mesh).second, this->surface_mesh);
         tree->accelerate_distance_queries();
+        CGAL::Iso_cuboid_3<simple_kernel> bbox = CGAL::bounding_box(this->surface_mesh.points_begin(), this->surface_mesh.points_end());
+        // calculate radius of bounding box
+
+        diag = 0.5 * sqrt((bbox.xmax()-bbox.xmin())*(bbox.xmax()-bbox.xmin())
+                               + (bbox.ymax()-bbox.ymin())*(bbox.ymax()-bbox.ymin())
+                               + (bbox.zmax()-bbox.zmin())*(bbox.zmax()-bbox.zmin()));
+        //auto center = (bbox.first + bbox.second) / 2.0;
 //        std::vector<MyCGAL::Primitives::Object<double>*>objects;
 //        for(face_descriptor fd: CGAL::faces(surface_mesh)){
 //            Point p0=fd->halfedge()->vertex()->point();
