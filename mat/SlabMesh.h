@@ -118,6 +118,24 @@ public:
     }
     void deleteWrongEdges();
     MyCGAL::Primitives::BVHAccel<double>* constructBVH();
+    MyCGAL::Primitives::BVHAccel<double>* constructMeshFacetsBVH(Surface_mesh &surface_mesh)
+    {
+        int counter=0;
+        std::vector<MyCGAL::Primitives::Object<double>*>objects;
+        for(face_descriptor fd: CGAL::faces(surface_mesh)){
+            Point p0=fd->halfedge()->vertex()->point();
+            Point p1=fd->halfedge()->next()->vertex()->point();
+            Point p2=fd->halfedge()->next()->next()->vertex()->point();
+            MyCGAL::Primitives::Vector3d v0(p0.x(),p0.y(),p0.z());
+            MyCGAL::Primitives::Vector3d v1(p1.x(),p1.y(),p1.z());
+            MyCGAL::Primitives::Vector3d v2(p2.x(),p2.y(),p2.z());
+            MyCGAL::Primitives::Triangle<double> *tri=new MyCGAL::Primitives::Triangle<double>(v0,v1,v2);
+            tri->id=counter++;
+            objects.push_back(tri);
+        }
+        MyCGAL::Primitives::BVHAccel<double> *tree=new MyCGAL::Primitives::BVHAccel<double>(objects);
+        return tree;
+    }
 public:
     void project();
     void inverseProject();
@@ -166,7 +184,7 @@ public:
     unsigned simplified_boundary_edges;
 
     double bound_weight;//边界边权值取0.1
-
+    Mesh_domain * domain=nullptr;
 public:
     void AdjustStorage();
 
@@ -242,7 +260,7 @@ public:
     double GetRatioHyperbolicEuclid(unsigned eid);
 
     void ExportSimplifyResult();
-    void Export(std::string fname);
+    void Export(std::string fname,bool backup=false);
 
 public:
     void clear();

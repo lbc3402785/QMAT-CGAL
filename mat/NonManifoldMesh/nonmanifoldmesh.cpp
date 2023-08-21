@@ -765,6 +765,9 @@ void NonManifoldMesh::Export(std::string fname) {
     //add by me
      fout <<"#saved_vertex"<< std::endl;
     for (unsigned i = 0; i < vertices.size(); i++){
+        if(vertices[i].second->sphere.radius<1e-5){
+            vertices[i].second->saved_vertex=true;
+        }
         fout << "s " <<(vertices[i].second->saved_vertex?1:0)<< std::endl;
         fout << std::endl;
     }

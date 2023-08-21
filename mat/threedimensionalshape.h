@@ -35,7 +35,7 @@ private:
     void createSlabFace(std::tuple<int,int,int> face,std::map<int,int>& shapePointIndexMap,std::map<std::pair<int,int>,int>& shapeEdgeIndexMap,std::map<std::tuple<int,int,int>,int>& shapeFaceIndexMap);
 public:
     Mesh input;		// the mesh of the input shape 用来四面体化的数据
-
+    Surface_mesh surface_mesh;
     unsigned num_vor_v, num_vor_e, num_vor_f;
 
     NonManifoldMesh input_nmm;//medial mesh data for compute and save

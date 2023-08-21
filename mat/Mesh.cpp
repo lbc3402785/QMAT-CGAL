@@ -3,6 +3,8 @@
 #include <CGAL/centroid.h>
 #include <CGAL/Polygon_mesh_processing/compute_normal.h>
 #include <Eigen/Dense>
+#include <CGAL/assertions.h>
+#include <exception>
 //Radius of the circumscribed sphere of the tetrahedron
 double Triangulation::TetCircumRadius(const Tetrahedron & tet)
 {
@@ -1284,28 +1286,126 @@ Vector3d MPMesh::NearestPoint(Vector3d p)
     }while(havc != pVertexList[vid]->vertex_begin());
     return fp;
 }
-
-void MPMesh::detectShardEdge()
+double calculateAngle(const Point& v1, const Point& v2, const Point& v3)
 {
+    Vector u1 = v2 - v1;
+    Vector u2 = v3 - v1;
 
-    nb_sharp_edges=0;
-    std::map<Surface_mesh::Halfedge_handle,std::pair<Point_3, Point_3> >constrained_edges;
+    double dotProduct = u1 * u2;
+    double magnitudeProduct = std::sqrt(u1.squared_length() * u2.squared_length());
+    return std::acos(dotProduct / magnitudeProduct);
+}
+void MPMesh::setVertexId()
+{
     int counter = 0;
     for ( MPMesh::Vertex_iterator it = this->vertices_begin (); it != this->vertices_end (); ++it ) {
         it->id = counter;
         counter++;
     }
-//    for ( Surface_mesh::Vertex_iterator it = surface_mesh.vertices_begin (); it != surface_mesh.vertices_end (); ++it ) {
-//        it->id () = counter;
-//        counter++;
+}
+void MPMesh::detectSharpCorner()
+{
+    nb_sharp_corners=0;
+    int edgeCountThreshold = 3;  // 设置边数阈值
+
+
+    for (Vertex_iterator v = vertices_begin(); v != vertices_end(); ++v)
+    {
+        int degree = 0;
+        Halfedge_around_vertex_circulator h = v->vertex_begin();
+        Halfedge_around_vertex_circulator end = h;
+
+        do
+        {
+            ++degree;
+            ++h;
+        } while (h != end);
+        if (degree < edgeCountThreshold)
+            continue; // 边数不满足阈值，跳过
+        bool isSharpCorner = true;
+        std::vector<Point> vertices;
+
+        h = v->vertex_begin();
+        end = h;
+        Vector vn=v->normal;
+        do
+        {
+            vertices.push_back(h->opposite()->vertex()->point());
+            ++h;
+        } while (h != end);
+        for (std::size_t i = 0; i < vertices.size(); ++i)
+        {
+            Point v1 = v->point();
+            Point v2 = vertices[(i + 1) % vertices.size()];
+            Point v3 = vertices[(i + 2) % vertices.size()];
+
+            double angle = calculateAngle(v1, v2, v3);//邻接的出射边的夹角
+
+            if (angle > M_PI/3.0)
+            {
+                isSharpCorner = false;
+                break;
+            }
+        }
+        h = v->vertex_begin();
+        do
+        {
+            Vector ni= h->facet()->normal;
+            ++h;
+            double dotProduct = vn * ni;
+            double magnitudeProduct = std::sqrt(vn.squared_length() * ni.squared_length());
+            double angle= std::acos(dotProduct / magnitudeProduct);
+            if(angle<M_PI/4){
+                isSharpCorner = false;
+                break;
+            }
+        } while (isSharpCorner&&h != end);
+        if (isSharpCorner)
+        {
+            std::cout << "Sharp corner detected at vertex with id " << v->id << std::endl;
+            sharpCornerMap[v->id]=true;
+            ++nb_sharp_corners;
+        }
+    }
+    std::cout<<"nb_sharp_corners:"<<nb_sharp_corners<<std::endl;
+//    for(std::map<int,bool>::iterator it=sharpCornerMap.begin();it!=sharpCornerMap.end();++it)
+//    {
+//        sharpPointMap[it->first]=true;
+//        Vertex_iterator vertexIter = vertices_begin();
+//        std::advance(vertexIter, it->first); // 移动迭代器到第 i 个顶点
+//        // 遍历与该顶点关联的所有边
+//        Halfedge_around_vertex_circulator edgeIter = vertexIter->vertex_begin();
+//        Halfedge_around_vertex_circulator edgeEnd = edgeIter;
+
+//        do
+//        {
+//            // 访问边的属性或顶点
+//            Vertex_handle adjacentVertex = edgeIter->opposite()->vertex();
+//            sharpPointMap[adjacentVertex->id]=true;
+//            std::pair<int,int> edgePair=it->first<adjacentVertex->id?std::make_pair(it->first,adjacentVertex->id):std::make_pair(adjacentVertex->id,it->first);
+//            sharpEdgeMap[edgePair]=true;
+//            ++edgeIter;
+//        } while (edgeIter != edgeEnd);
 //    }
-//    for(Surface_mesh::Edge_iterator eb = surface_mesh.edges_begin(), ee = surface_mesh.edges_end() ; eb != ee ; ++eb )
+}
+
+void MPMesh::detectSharpEdge()
+{
+    nb_sharp_edges=0;
+    std::map<Surface_mesh::Halfedge_handle,std::pair<Point_3, Point_3> >constrained_edges;
+
+    //    for ( Surface_mesh::Vertex_iterator it = surface_mesh.vertices_begin (); it != surface_mesh.vertices_end (); ++it ) {
+    //        it->id () = counter;
+    //        counter++;
+    //    }
+    //    for(Surface_mesh::Edge_iterator eb = surface_mesh.edges_begin(), ee = surface_mesh.edges_end() ; eb != ee ; ++eb )
     for(MPMesh::Edge_iterator eb = this->edges_begin(), ee = this->edges_end() ; eb != ee ; ++eb )
     {
         int i0=eb->vertex()->id;
         int i1=eb->opposite()->vertex()->id;
         std::pair<int,int> edgePair=i0<i1?std::make_pair(i0,i1):std::make_pair(i1,i0);
-        if ( eb->is_border_edge() ){
+        if ( eb->is_border_edge() ){//封闭的三角网格不存在边界边
+            std::cerr<<"border edge detected"<<std::endl;
             ++nb_sharp_edges;
             sharpPointMap[i0]=true;
             sharpPointMap[i1]=true;
@@ -1318,11 +1418,11 @@ void MPMesh::detectShardEdge()
         }
         else{
             double angle = CGAL::Mesh_3::dihedral_angle(
-                        eb->opposite()->vertex()->point(),
-                        eb->vertex()->point(),
+                        eb->opposite()->vertex()->point(),//current vertex
+                        eb->vertex()->point(),//point to vertex
                         eb->next()->vertex()->point(),
                         eb->opposite()->next()->vertex()->point() );
-            if ( std::abs(angle)<150 ){
+            if ( std::abs(angle)<92 ){
                 ++nb_sharp_edges;
                 sharpPointMap[i0]=true;
                 sharpPointMap[i1]=true;
@@ -1337,7 +1437,7 @@ void MPMesh::detectShardEdge()
         }
     }
     std::cout<<"nb_sharp_edges:"<<nb_sharp_edges<<std::endl;
-//    for(Surface_mesh::Facet_iterator fb=surface_mesh.facets_begin(),fe=surface_mesh.facets_end();fb!=fe;++fb){
+    //    for(Surface_mesh::Facet_iterator fb=surface_mesh.facets_begin(),fe=surface_mesh.facets_end();fb!=fe;++fb){
     for(MPMesh::Facet_iterator fb=this->facets_begin(),fe=this->facets_end();fb!=fe;++fb){
         int i0=fb->halfedge()->vertex()->id;
         int i1=fb->halfedge()->next()->vertex()->id;
@@ -1359,9 +1459,37 @@ void MPMesh::detectShardEdge()
 
 void MPMesh::computedt()
 {
+    bool addIndicator=true;
     // compute dt
     dt.clear();
+    // 遍历所有边并计算边长
+    maxEdgeLength=0;
+    minEdgeLength=1e20;
+    std::vector<double> edgeLengths;
+    for (Halfedge_iterator it = halfedges_begin(); it != halfedges_end(); ++it)
+    {
+        // 获取边的两个顶点
+        Point p1 = it->vertex()->point();
+        Point p2 = it->opposite()->vertex()->point();
 
+        // 计算边长
+        double length = std::sqrt(CGAL::squared_distance(p1, p2));
+        if(length>maxEdgeLength){
+            maxEdgeLength=length;
+        }
+        if(length<minEdgeLength){
+            minEdgeLength=length;
+        }
+        // 输出边长
+        edgeLengths.push_back(length);
+    }
+    std::sort(edgeLengths.begin(),edgeLengths.end());
+    if(edgeLengths.size()%2==0){
+        medianEdgeLength=(edgeLengths[edgeLengths.size()/2]+edgeLengths[edgeLengths.size()/2+1])*0.5;
+    }else{
+        medianEdgeLength=edgeLengths[edgeLengths.size()/2];
+    }
+    std::cout<<"minEdgeLength,medianEdgeLength,maxEdgeLength:"<<minEdgeLength<<"."<<medianEdgeLength<<"."<<maxEdgeLength<<std::endl;
     Vertex_iterator pVertex;
     int idx = 0;
     pVertex = vertices_begin();
@@ -1373,7 +1501,53 @@ void MPMesh::computedt()
         vh = dt.insert(p);
         vh->info().id = idx;
     }
-
+    int np=idx;
+    if(addIndicator){
+        Face_iterator fit=facets_begin();
+        for(;fit!=facets_end();fit++)
+        {
+            Vector fv=fit->normal;
+            Point A=fit->halfedge()->vertex()->point();
+            Point B=fit->halfedge()->next()->vertex()->point();
+            Point C=fit->halfedge()->next()->next()->vertex()->point();
+            Vector AB=B-A;
+            Vector AC=B-A;
+            Vector BC=C-B;
+            double lAB=std::sqrt(AB.squared_length());
+            double lAC=std::sqrt(AC.squared_length());
+            double lBC=std::sqrt(BC.squared_length());
+            double minLength=std::min(std::min(lAB,lAC),lBC);
+            double cx=(A[0]+B[0]+C[0])/3.0+fv[0]*minLength;
+            double cy=(A[1]+B[1]+C[1])/3.0+fv[1]*minLength;
+            double cz=(A[2]+B[2]+C[2])/3.0+fv[2]*minLength;
+            Point_t add(cx,cy,cz);
+            if(domain->is_in_domain_object()(add) < 0)
+            {
+                Vertex_handle_t vh;
+                vh = dt.insert(add);
+                vh->info().id = idx;
+                idx++;
+            }
+        }
+        for (std::map<int, bool>::iterator it = sharpPointMap.begin(); it != sharpPointMap.end(); ++it) {
+            int id=it->first;
+            Vertex_handle v = vertices_begin();
+            std::advance(v, id);
+            Point p=v->point();
+            Vector normal=v->normal;
+            double cx=p[0]+normal[0]*medianEdgeLength;
+            double cy=p[1]+normal[1]*medianEdgeLength;
+            double cz=p[2]+normal[2]*medianEdgeLength;
+            Point_t add(cx,cy,cz);
+            if(domain->is_in_domain_object()(add) < 0)
+            {
+                Vertex_handle_t vh;
+                vh = dt.insert(add);
+                vh->info().id = idx;
+                idx++;
+            }
+        }
+    }
     //for(unsigned int i = 0; i < pVertexList.size(); i ++)
     //{
     //	Point_t p(pVertexList[i]->point()[0],pVertexList[i]->point()[1],pVertexList[i]->point()[2]);
@@ -1381,44 +1555,221 @@ void MPMesh::computedt()
     //	vh = dt.insert(p);
     //	vh->info().id = pVertexList[i]->id;
     //}
-
+    size_t numtetr=dt.number_of_finite_cells();
+    checked.assign(numtetr,false);
+    deleted.assign(numtetr,true);
+    std::vector<Point_t> CC;
+    std::vector<double> radiuses;
+    int countchecked=0;
     unsigned int fid(0);
+    for(Finite_cells_iterator_t fci = dt.finite_cells_begin();
+        fci != dt.finite_cells_end();
+        fci ++,fid ++)
+    {
+        fci->info().id =fid ;
+        fci->info().is_boundary=false;
+        fci->info().is_sharp_corner=false;
+        fci->info().has_sharp_edge=false;
+        int i0=fci->vertex(0)->info().id;
+        int i1=fci->vertex(1)->info().id;
+        int i2=fci->vertex(2)->info().id;
+        int i3=fci->vertex(3)->info().id;
+        try {
+            Point_t cent = CGAL::circumcenter(dt.tetrahedron(fci));
+            double squared_radius = CGAL::squared_radius(fci->vertex(0)->point(), fci->vertex(1)->point(), fci->vertex(2)->point(), fci->vertex(3)->point());
+            CC.push_back(cent);
+            radiuses.push_back(std::sqrt(squared_radius));
+            if(addIndicator){
+                if (i0 >= np || i1 >= np || i2 >= np || i3 >= np)
+                {
+                    fci->info().inside = false;
+                    checked[fid] = true;
+                    deleted[fid] = true;
+                    countchecked++;
+                }
+            }
+        }
+        catch (const std::exception& e) {
+            CC.push_back(Point_t(0,0,0));
+            radiuses.push_back(1e-5);
+            fci->info().inside = false;
+            deleted[fci->info().id] = !(fci->info().inside);
+        }
+
+        
+    }
+    if(addIndicator){
+        std::cout<<"first step check "<<countchecked<<" and total number is "<<numtetr<<std::endl;
+
+        double eps=0.88;
+        int level=0;
+        while(countchecked<numtetr&&level<50){
+            level++;
+            for(Finite_facets_iterator_t ffi = dt.finite_facets_begin();
+                ffi != dt.finite_facets_end();
+                ffi ++)
+            {
+                Triangulation::Object o = dt.dual(*ffi);
+                if(const Triangulation::Segment *s = CGAL::object_cast<Triangulation::Segment>(&o))
+                {
+                    Cell_handle_t cell0=ffi->first;
+                    Cell_handle_t cell1=dt.mirror_facet(*ffi).first;
+                    int tetr0=cell0->info().id;
+                    int tetr1=cell1->info().id;
+                    if(!checked[tetr0]&&!checked[tetr1]){
+                        continue;
+                    }
+                    if(checked[tetr0]&&checked[tetr1]){
+                        continue;
+                    }
+                    double r0=radiuses[tetr0];
+                    double r1=radiuses[tetr1];
+                    Point_t c0=CC[tetr0];
+                    Point_t c1=CC[tetr1];
+                    double distcc=(c0-c1).squared_length();
+                    double alpha=(distcc-r0*r0-r1*r1)/(2*r0*r1);
+                    if(alpha<-eps){
+                        //flag as equal \alpha>arccos(-toll(id))深相交
+                        if(checked[tetr0]){
+                            if(!deleted[tetr0]){
+                                deleted[tetr1]=deleted[tetr0] ;//flag as equal
+                                cell1->info().inside=cell0->info().inside;
+                                checked[tetr1]=true;//check 标记过的
+                                countchecked++;
+                            }
+
+                        }else{
+                            if(!deleted[tetr1]){
+                                deleted[tetr0]=deleted[tetr1] ;//flag as equal
+                                cell0->info().inside=cell1->info().inside;
+                                checked[tetr0]=true;//check 标记过的
+                                countchecked++;
+                            }
+                        }
+                    }else if(alpha>eps){
+                        //flag as different \alpha<arccos(toll(id))浅相交
+                        if (checked[tetr0]){//find the checked one between the two
+                            if(deleted[tetr0]){
+                                deleted[tetr1]=!deleted[tetr0] ;//flag as different
+                                cell1->info().inside=!cell0->info().inside;
+                                checked[tetr1]=true;//check
+                                countchecked++;
+                            }
+                        }else{
+                            if(deleted[tetr1]){
+                                deleted[tetr0]=!deleted[tetr1] ;//flag as different
+                                cell0->info().inside=!cell1->info().inside;
+                                checked[tetr0]=true;//check
+                                countchecked++;
+                            }
+                        }
+                    }
+                }
+            }
+            eps=eps-0.005;
+        }
+        std::cout<<"second step check "<<countchecked<<" and total number is "<<numtetr<<std::endl;
+    }
     for(Finite_cells_iterator_t fci = dt.finite_cells_begin();
         fci != dt.finite_cells_end();
         fci ++)
     {
-        fci->info().id = fid ++;
         fci->info().is_boundary=false;
-        Point_t cent = CGAL::circumcenter(dt.tetrahedron(fci));
-        //double scribedRadius;
-        //Point_t scribed=dt.inscribeSphereCenter(dt.tetrahedron(fci),&scribedRadius);
-        //Point_t fp = domain->project_on_surface(cent);
-        //fci->info().dist_center_to_boundary = sqrt((cent-fp).squared_length());
+        fci->info().is_sharp_corner=false;
+        fci->info().has_sharp_edge=false;
+        int i0=fci->vertex(0)->info().id;
+        int i1=fci->vertex(1)->info().id;
+        int i2=fci->vertex(2)->info().id;
+        int i3=fci->vertex(3)->info().id;
+        if(checked[fci->info().id]&&!deleted[fci->info().id])
+        {
+            continue;
+        }
+        Point_t cent;
+        Point_t scribed;
+        try {
+            cent = CGAL::circumcenter(dt.tetrahedron(fci));
+            double scribedRadius;
+            scribed = dt.inscribeSphereCenter(dt.tetrahedron(fci), &scribedRadius);
+            //Point_t fp = domain->project_on_surface(cent);
+            //fci->info().dist_center_to_boundary = sqrt((cent-fp).squared_length());
 
-        Wm4::Vector3d cent_wm4(cent[0], cent[1], cent[2]);
-        if(!inside_boundingbox(cent_wm4))
-            fci->info().inside = false;
-        else{
+            Wm4::Vector3d cent_wm4(cent[0], cent[1], cent[2]);
+
             fci->info().inside = (domain->is_in_domain_object()(cent) > 0);//球心是否在整个域内
+            deleted[fci->info().id] = !(fci->info().inside);
+            //fci->info().inside = (domain->is_in_domain_object()(scribed) > 0);//球心是否在整个域内
+        }
+        catch (std::exception& e) {
+            fci->info().inside = false;
+            deleted[fci->info().id] = !(fci->info().inside);
+            continue;
         }
         if(fci->info().inside){
-            Triangulation::Tetrahedron cell=dt.tetrahedron(fci);
-            Point_t circumCenter=CGAL::circumcenter(cell);
-            bool allOutSide=true;
-            for (unsigned k = 0; k < 4; k++) {
-                Point_t p=fci->vertex(k)->point();
-                int id=fci->vertex(k)->info().id;
-                Vertex_handle v = vertices_begin();
-                std::advance(v, id);
-                Vector_3 n =v->normal;
-                Vector_3 cp(p.x()-circumCenter.x(),p.y()-circumCenter.y(),p.z()-circumCenter.z());
-                double dot=n*cp;
-                if(dot<0) fci->info().is_boundary=true;
-                if(dot>0){
-                    allOutSide = false;
-                }
-            }
-            if(allOutSide) fci->info().inside = false;
+            //try {
+            //    Triangulation::Tetrahedron cell = dt.tetrahedron(fci);
+            //    Point_t circumCenter = CGAL::circumcenter(cell);
+            //    bool allOutSide = true;
+            //    for (unsigned k = 0; k < 4; k++) {
+            //        Point_t p = fci->vertex(k)->point();
+            //        int id = fci->vertex(k)->info().id;
+            //        Vertex_handle v = vertices_begin();
+            //        std::advance(v, id);
+            //        Vector_3 n = v->normal;//顶点的法向
+            //        Vector_3 cp(p.x() - circumCenter.x(), p.y() - circumCenter.y(), p.z() - circumCenter.z());//球心指向顶点
+            //        Vector_3 cp(p.x()-scribed.x(),p.y()-scribed.y(),p.z()-scribed.z());//球心指向顶点
+            //        double dot = n * cp;
+            //        if (dot < 0) fci->info().is_boundary = true;
+            //        if (dot > 0) {
+            //            allOutSide = false;
+            //        }
+            //    }
+            //    if (allOutSide) {
+            //        所有球心指向顶点的方向都与顶点法向相反
+            //        std::cerr << "found outside sphere!" << std::endl;
+            //        fci->info().inside = false;
+            //        deleted[fci->info().id] = true;
+            //    }
+            //}
+            //catch (std::exception& e) {
+            //    fci->info().inside = false;
+            //    deleted[fci->info().id] = !(fci->info().inside);
+            //    continue;
+            //}
+        }
+        else {
+//            try {
+//                if (domain->is_in_domain_object()(scribed) > 0) {
+//                    if (sharpCornerMap.count(i0) > 0 || sharpCornerMap.count(i1) > 0
+//                            || sharpCornerMap.count(i2) > 0 || sharpCornerMap.count(i3) > 0) {
+//                        fci->info().inside = true;
+//                        deleted[fci->info().id] = false;
+//                        fci->info().is_sharp_corner = true;
+//                        std::cerr << "add sharp corner sphere!" << std::endl;
+//                    }
+//                    std::vector<int> tmp = { i0,i1,i2,i3 };
+//                    std::sort(tmp.begin(), tmp.end());
+//                    i0 = tmp[0];
+//                    i1 = tmp[1];
+//                    i2 = tmp[2];
+//                    i3 = tmp[3];
+//                    if (sharpPointMap.count(i0) || sharpPointMap.count(i1) || sharpPointMap.count(i2) || sharpPointMap.count(i3)) {
+//                        //            if(sharpEdgeMap.count(std::make_pair(i0,i1))>0||sharpEdgeMap.count(std::make_pair(i0,i2))>0
+//                        //                    ||sharpEdgeMap.count(std::make_pair(i0,i3))>0||sharpEdgeMap.count(std::make_pair(i1,i2))>0
+//                        //                    ||sharpEdgeMap.count(std::make_pair(i1,i3))>0||sharpEdgeMap.count(std::make_pair(i2,i3))>0){
+//                        fci->info().inside = true;
+//                        deleted[fci->info().id] = false;
+//                        fci->info().has_sharp_edge = true;
+//                        std::cerr << "add sharp edge sphere!" << std::endl;
+//                    }
+//                }
+//            }
+//            catch (std::exception& e) {
+//                fci->info().inside = false;
+//                deleted[fci->info().id] = true;
+
+//            }
+
         }
     }
 }

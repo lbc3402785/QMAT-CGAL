@@ -27,6 +27,7 @@ void SlabMesh::compute()
 }
 void SlabMesh::deleteWrongEdges()
 {
+
     for(int i=0;i<edges.size();i++){
         int64_t i0=edges[i].second->vertices_.first;
         int64_t i1=edges[i].second->vertices_.second;
@@ -76,8 +77,10 @@ MyCGAL::Primitives::BVHAccel<double>* SlabMesh::constructBVH()
         if(vertices[i].first){
             MyCGAL::Primitives::Vector3d c(vertices[i].second->sphere.center.X(),vertices[i].second->sphere.center.Y(),vertices[i].second->sphere.center.Z());
             MyCGAL::Primitives::Sphere<double>*sphere=new MyCGAL::Primitives::Sphere<double>(c,vertices[i].second->sphere.radius);
-            objects.push_back(sphere);
-
+            if(vertices[i].second->sphere.radius>1e-5){
+                sphere->id=i;
+                objects.push_back(sphere);
+            }
         }
 
     }
@@ -90,10 +93,13 @@ MyCGAL::Primitives::BVHAccel<double>* SlabMesh::constructBVH()
             MyCGAL::Primitives::Vector3<double> c1(vertices[i1].second->sphere.center.X(),vertices[i1].second->sphere.center.Y(),vertices[i1].second->sphere.center.Z());
             double r1=vertices[i1].second->sphere.radius;
             MyCGAL::Primitives::Cone<double> *cone=new MyCGAL::Primitives::Cone<double>(c0,r0,c1,r1);
+            cone->id=i;
             if(cone->type==1){
                 delete cone;
             }else{
-                objects.push_back(cone);
+                if(r0>1e-5&&r1>1e-5){
+                    objects.push_back(cone);
+                }
             }
         }
     }
@@ -142,6 +148,7 @@ MyCGAL::Primitives::BVHAccel<double>* SlabMesh::constructBVH()
                 }
                 convexPoly.triangles=faces[i].second->envelop.indexTris;
                 MyCGAL::Primitives::PairTriangle<double> *pairT=new MyCGAL::Primitives::PairTriangle<double>();
+                pairT->id=i;
                 objects.push_back(pairT);
             }
 
@@ -183,6 +190,7 @@ void SlabMesh::inverseProject()
 {
     if(tree==nullptr)return;
     mat2SurfaceMap.clear();
+    std::cout<<"begin inverseProject..."<<std::endl;
 #pragma omp parallel for
     for(int i=0;i<vertices.size();i++){
         if(vertices[i].first){
@@ -196,6 +204,7 @@ void SlabMesh::inverseProject()
             }
         }
     }
+    std::cout<<"inverseProject done!"<<std::endl;
 }
 
 void SlabMesh::update()
@@ -1559,7 +1568,9 @@ bool SlabMesh::MinCostEdgeCollapse(unsigned & eid){
     //// 对于合并会发生拓扑改变的边，不允许进行合并
     if (!edges[eid].second->topo_contractable)
         return false;
-
+    if(vertices[v1].second->isFeature||vertices[v2].second->isFeature){
+        return false;
+    }
     if(!vertices[v1].second->topo_contractable){
         if(vertices[v1].second->edges_.size()==2){//骨骼点连接的边减少到2之后不能再缩减
             return false;
@@ -1668,7 +1679,11 @@ bool SlabMesh::MinCostEdgeCollapse(unsigned & eid){
     unsigned temp_related_face = vertices[v1].second->related_face + vertices[v2].second->related_face;
     double temp_mean_squre_error = edges[eid].second->collapse_cost < 0 ? 0 : edges[eid].second->collapse_cost / temp_related_face;
     max_mean_squre_error = max(temp_mean_squre_error, max_mean_squre_error);
-
+    //add by me
+    Point center(sphere.center[0],sphere.center[1],sphere.center[2]);
+    Point_and_primitive_id pp=tree->closest_point_and_primitive(center);
+    Point p = pp.first;
+    sphere.radius=std::sqrt((p-center).squared_length());
     unsigned vid_tgt;
     if(MergeVertices(v1, v2, vid_tgt)){
         vertices[vid_tgt].second->slab_A = A;
@@ -1868,10 +1883,17 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
                 {
                     Sphere mid_sphere = (vertices[v1].second->sphere + vertices[v2].second->sphere) * 0.5;
                     lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);//使用中点作为收缩解
+                }else{
+                    Point_t tmp(lamdar[0],lamdar[1],lamdar[2]);
+                    if(domain->is_in_domain_object()(tmp)<0){
+                        std::cerr<<"outside of mesh!Take the mid sphere"<<std::endl;
+                        Sphere mid_sphere = (vertices[v1].second->sphere + vertices[v2].second->sphere) * 0.5;
+                        lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);//使用中点作为收缩解
+                    }
                 }
             }
             else
-            {
+            {//矩阵不可逆
                 // it's now calculate as the middle of the spheres
                 Sphere mid_sphere = (vertices[v1].second->sphere + vertices[v2].second->sphere) * 0.5;
                 lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);//使用中点作为收缩解
@@ -3316,15 +3338,22 @@ void SlabMesh::ExportSimplifyResult()
     //f_result_out << simplified_boundary_edges << "\t" << simplified_inside_edges << "\t" << maxhausdorff_distance << endl;
 }
 
-void SlabMesh::Export(std::string fname){
+void SlabMesh::Export(std::string fname,bool backup){
     AdjustStorage();
     updateSize();
-    fname += "___v_";
-    fname += std::to_string(static_cast<long long>(numVertices));
-    fname += "___e_";
-    fname += std::to_string(static_cast<long long>(numEdges));
-    fname += "___f_";
-    fname += std::to_string(static_cast<long long>(numFaces));
+    if (fname.find(".off") == std::string::npos||backup)
+    {
+        fname += "___v_";
+        fname += std::to_string(static_cast<long long>(numVertices));
+        fname += "___e_";
+        fname += std::to_string(static_cast<long long>(numEdges));
+        fname += "___f_";
+        fname += std::to_string(static_cast<long long>(numFaces));
+    }
+    else
+    {
+        fname = fname.substr(0, fname.find(".off"));
+    }
 
     std::string maname = fname;
     maname += ".ma";
@@ -3487,7 +3516,7 @@ std::pair<at::Tensor,torch::Tensor> DistToBoundaryLoss::forward(SlabMesh *mesh,s
 
             #pragma omp parallel for reduction(+:pointLoss)  reduction(+: pointCount)
             for(int i=0;i<mesh->vertices.size();i++){
-                if(mesh->vertices[i].first){
+                if(mesh->vertices[i].first&&!mesh->vertices[i].second->isFeature){
                     Point p(v0[i][0].item<double>(),v0[i][1].item<double>(),v0[i][2].item<double>());
                     Point_and_primitive_id pp=tree->closest_point_and_primitive(p);
                     Point closest_point = pp.first;
@@ -3498,6 +3527,7 @@ std::pair<at::Tensor,torch::Tensor> DistToBoundaryLoss::forward(SlabMesh *mesh,s
                     Point p0=id0->point();
                     Point p1=id1->point();
                     Point p2=id2->point();
+
                     torch::Tensor fn=torch::tensor({fnormals[fid].x(),fnormals[fid].y(),fnormals[fid].z()},device);
                     {
                         torch::Tensor cn=torch::tensor({closest_point.x(),closest_point.y(),closest_point.z()},device)-v0[i];
@@ -3533,6 +3563,7 @@ std::pair<at::Tensor,torch::Tensor> DistToBoundaryLoss::forward(SlabMesh *mesh,s
 
                         pointCount++;
                     }
+
                 }
             }
         }

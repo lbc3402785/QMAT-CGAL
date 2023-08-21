@@ -63,50 +63,80 @@ void ThreeDimensionalShape::ComputeInputNMM()
 
         fci->info().faceCount=onSurfaceCount;
         Point center(circumCenter[0],circumCenter[1],circumCenter[2]);
-        switch(onSurfaceCount){
-        case 0:{
-            switch(side){
-            case CGAL::ON_UNBOUNDED_SIDE:{
-                (*bvp.second).sphere.center = to_wm4(circumCenter);
-                (*bvp.second).sphere.radius =std::min(circumRadius,distCenterToBoundary(circumCenter));
-                //                (*bvp.second).sphere.center = to_wm4(scribed);
-                //                (*bvp.second).sphere.radius =std::min(scribedRadius,distCenterToBoundary(scribed));
-                (*bvp.second).isShow=true;
-                //bvp.first=false;
-                break;
-            }
-            case CGAL::ON_BOUNDARY:
-            case CGAL::ON_BOUNDED_SIDE:
-                (*bvp.second).sphere.center = to_wm4(circumCenter);
-                (*bvp.second).sphere.radius =std::min(circumRadius,std::min(distCenterToBoundary(circumCenter),distCenterToBoundary(fci,center)));/*distCenterToBoundary(fci,center);*/
-                //std::cout<<"wawa"<<std::endl;
-                break;
+        //        if(input.domain->is_in_domain_object()(circumCenter) < 0)
+        //        {
+        //            center=Point(scribed[0],scribed[1],scribed[2]);
+        //            (*bvp.second).sphere.center = to_wm4(scribed);
+        //            (*bvp.second).sphere.radius = distCenterToBoundary(scribed);
+        //        }else{
 
-            }
-            //std::cout<<"0 facet"<<std::endl;
-            break;
-        }
-        case 1:
+        //        }
+        if(fci->info().is_sharp_corner||fci->info().has_sharp_edge){
+
+            //if(fci->info().has_sharp_edge){
+                (*bvp.second).sphere.center = to_wm4(scribed);
+                (*bvp.second).sphere.radius = distCenterToBoundary(scribed);
+            //}
+//            else{
+//                for (unsigned k = 0; k < 4; k++) {
+//                    Point_t p=fci->vertex(k)->point();
+//                    int id=fci->vertex(k)->info().id;
+//                    if(input.sharpCornerMap.count(id)>0){
+//                        (*bvp.second).sphere.center = to_wm4(p);
+//                        (*bvp.second).sphere.radius =1e-5;
+//                        break;
+//                    }
+//                }
+
+//            }
+        }else{
             (*bvp.second).sphere.center = to_wm4(circumCenter);
-            (*bvp.second).sphere.radius =std::min(circumRadius,distCenterToBoundary(fci,center));
-            break;
-        case 2:{
-            (*bvp.second).sphere.center = to_wm4(circumCenter);
-            (*bvp.second).sphere.radius =std::min(circumRadius,distCenterToBoundary(fci,center));
-            break;
+            (*bvp.second).sphere.radius = distCenterToBoundary(circumCenter);
         }
-        case 3:{
-            (*bvp.second).sphere.center = to_wm4(circumCenter);
-            (*bvp.second).sphere.radius =std::min(circumRadius,distCenterToBoundary(fci,center));
-            break;
-        }
-        case 4:
-            (*bvp.second).sphere.center = to_wm4(circumCenter);
-            (*bvp.second).sphere.radius =std::min(circumRadius,distCenterToBoundary(fci,center));
-            break;
-        default:
-            std::cerr<<fci->info().tag<<" error"<<std::endl;
-        }
+        //        switch(onSurfaceCount){
+        //        case 0:{
+        //            switch(side){
+        //            case CGAL::ON_UNBOUNDED_SIDE:{
+        //                (*bvp.second).sphere.center = to_wm4(circumCenter);
+        //                (*bvp.second).sphere.radius =std::min(circumRadius,distCenterToBoundary(circumCenter));
+        //                //                (*bvp.second).sphere.center = to_wm4(scribed);
+        //                //                (*bvp.second).sphere.radius =std::min(scribedRadius,distCenterToBoundary(scribed));
+        //                (*bvp.second).isShow=true;
+        //                //bvp.first=false;
+        //                break;
+        //            }
+        //            case CGAL::ON_BOUNDARY:
+        //            case CGAL::ON_BOUNDED_SIDE:
+        //                (*bvp.second).sphere.center = to_wm4(circumCenter);
+        //                (*bvp.second).sphere.radius =std::min(circumRadius,std::min(distCenterToBoundary(circumCenter),distCenterToBoundary(fci,center)));/*distCenterToBoundary(fci,center);*/
+        //                //std::cout<<"wawa"<<std::endl;
+        //                break;
+
+        //            }
+        //            //std::cout<<"0 facet"<<std::endl;
+        //            break;
+        //        }
+        //        case 1:
+        //            (*bvp.second).sphere.center = to_wm4(circumCenter);
+        //            (*bvp.second).sphere.radius =std::min(circumRadius,distCenterToBoundary(fci,center));
+        //            break;
+        //        case 2:{
+        //            (*bvp.second).sphere.center = to_wm4(circumCenter);
+        //            (*bvp.second).sphere.radius =std::min(circumRadius,distCenterToBoundary(fci,center));
+        //            break;
+        //        }
+        //        case 3:{
+        //            (*bvp.second).sphere.center = to_wm4(circumCenter);
+        //            (*bvp.second).sphere.radius =std::min(circumRadius,distCenterToBoundary(fci,center));
+        //            break;
+        //        }
+        //        case 4:
+        //            (*bvp.second).sphere.center = to_wm4(circumCenter);
+        //            (*bvp.second).sphere.radius =std::min(circumRadius,distCenterToBoundary(fci,center));
+        //            break;
+        //        default:
+        //            std::cerr<<fci->info().tag<<" error"<<std::endl;
+        //        }
 
         //double inscribedRadius;
         //Point_t inscribed =pt->inscribeSphereCenter(pt->tetrahedron(fci),&inscribedRadius);
@@ -233,17 +263,17 @@ void ThreeDimensionalShape::ComputeInputNMM()
         }
     }
     //=========================sharp point/edge/face=========================
-    bool addSharpFeature=false;
+    bool addSharpFeature=true;
     if(addSharpFeature){
-        std::map<int,int> shapePointIndexMap;
+        std::map<int,int> shapePointIndexMap;//<锐边网格顶点id,中轴id>
         for(Finite_vertices_iterator_t fvi = pt->finite_vertices_begin(); fvi != pt->finite_vertices_end(); fvi ++){
-            if(input.sharpPointMap.count(fvi->info().id)>0){//添加中轴点，冗余的孤立点事后会被删除
+            if(input.sharpPointMap.count(fvi->info().id)>0||input.sharpCornerMap.count(fvi->info().id)>0){//添加中轴点，冗余的孤立点事后会被删除
                 Point_t p=fvi->point();
                 Bool_VertexPointer bvp;//中轴点
                 bvp.first = true;
                 bvp.second = new NonManifoldMesh_Vertex;
                 (*bvp.second).sphere.center=Vector3d(p.x(),p.y(),p.z());
-                (*bvp.second).sphere.radius=0;
+                (*bvp.second).sphere.radius=1e-5;
                 shapePointIndexMap[fvi->info().id]=input_nmm.numVertices;
                 input_nmm.vertices.push_back(bvp);
                 input_nmm.numVertices++;
@@ -258,6 +288,7 @@ void ThreeDimensionalShape::ComputeInputNMM()
                 fci->info().tag = -1;
                 continue;
             }
+            //4个顶点id
             int i0=fci->vertex(0)->info().id;
             int i1=fci->vertex(1)->info().id;
             int i2=fci->vertex(2)->info().id;
@@ -268,7 +299,81 @@ void ThreeDimensionalShape::ComputeInputNMM()
             i1=tmp[1];
             i2=tmp[2];
             i3=tmp[3];
-            if(input.sharpEdgeMap.count(std::make_pair(i0,i1))>0){
+            int tag=fci->info().tag;
+            if(input.sharpCornerMap.count(i0)>0)
+            {
+
+                std::pair<int,int> edget0=std::make_pair(tag,shapePointIndexMap[i0]);
+                if(shapeEdgeIndexMap.count(edget0)==0){//四面体中心到i1
+                    Bool_EdgePointer bep;
+                    bep.first = true;
+                    bep.second = new NonManifoldMesh_Edge;
+                    (*bep.second).vertices_.first = tag;
+                    (*bep.second).vertices_.second = shapePointIndexMap[i0];
+                    (*input_nmm.vertices[tag].second).edges_.insert(input_nmm.edges.size());//每个中轴点都存储关联的中轴边的序号
+                    (*input_nmm.vertices[shapePointIndexMap[i0]].second).edges_.insert(input_nmm.edges.size());//每个中轴点都存储关联的中轴边的序号
+                    shapeEdgeIndexMap[edget0]=input_nmm.edges.size();
+                    input_nmm.edges.push_back(bep);
+                    input_nmm.numEdges ++;
+                }
+            }
+
+            if(input.sharpCornerMap.count(i1)>0)
+            {
+
+                std::pair<int,int> edget1=std::make_pair(tag,shapePointIndexMap[i1]);
+                if(shapeEdgeIndexMap.count(edget1)==0){//四面体中心到i1
+                    Bool_EdgePointer bep;
+                    bep.first = true;
+                    bep.second = new NonManifoldMesh_Edge;
+                    (*bep.second).vertices_.first = tag;
+                    (*bep.second).vertices_.second = shapePointIndexMap[i1];
+                    (*input_nmm.vertices[tag].second).edges_.insert(input_nmm.edges.size());//每个中轴点都存储关联的中轴边的序号
+                    (*input_nmm.vertices[shapePointIndexMap[i1]].second).edges_.insert(input_nmm.edges.size());//每个中轴点都存储关联的中轴边的序号
+                    shapeEdgeIndexMap[edget1]=input_nmm.edges.size();
+                    input_nmm.edges.push_back(bep);
+                    input_nmm.numEdges ++;
+                }
+            }
+
+            if(input.sharpCornerMap.count(i2)>0)
+            {
+
+                std::pair<int,int> edget2=std::make_pair(tag,shapePointIndexMap[i2]);
+                if(shapeEdgeIndexMap.count(edget2)==0){//四面体中心到i1
+                    Bool_EdgePointer bep;
+                    bep.first = true;
+                    bep.second = new NonManifoldMesh_Edge;
+                    (*bep.second).vertices_.first = tag;
+                    (*bep.second).vertices_.second = shapePointIndexMap[i2];
+                    (*input_nmm.vertices[tag].second).edges_.insert(input_nmm.edges.size());//每个中轴点都存储关联的中轴边的序号
+                    (*input_nmm.vertices[shapePointIndexMap[i2]].second).edges_.insert(input_nmm.edges.size());//每个中轴点都存储关联的中轴边的序号
+                    shapeEdgeIndexMap[edget2]=input_nmm.edges.size();
+                    input_nmm.edges.push_back(bep);
+                    input_nmm.numEdges ++;
+                }
+            }
+
+            if(input.sharpCornerMap.count(i3)>0)
+            {
+
+                std::pair<int,int> edget3=std::make_pair(tag,shapePointIndexMap[i3]);
+                if(shapeEdgeIndexMap.count(edget3)==0){//四面体中心到i1
+                    Bool_EdgePointer bep;
+                    bep.first = true;
+                    bep.second = new NonManifoldMesh_Edge;
+                    (*bep.second).vertices_.first = tag;
+                    (*bep.second).vertices_.second = shapePointIndexMap[i3];
+                    (*input_nmm.vertices[tag].second).edges_.insert(input_nmm.edges.size());//每个中轴点都存储关联的中轴边的序号
+                    (*input_nmm.vertices[shapePointIndexMap[i3]].second).edges_.insert(input_nmm.edges.size());//每个中轴点都存储关联的中轴边的序号
+                    shapeEdgeIndexMap[edget3]=input_nmm.edges.size();
+                    input_nmm.edges.push_back(bep);
+                    input_nmm.numEdges ++;
+                }
+            }
+
+
+            if(input.sharpEdgeMap.count(std::make_pair(i0,i1))>0){//属于锐边
                 createSharpSlabEdgeAndFace(fci->info().tag,std::make_pair(i0,i1),shapePointIndexMap,shapeEdgeIndexMap,shapeFaceIndexMap);
             }
             if(input.sharpEdgeMap.count(std::make_pair(i0,i2))>0){
@@ -286,8 +391,6 @@ void ThreeDimensionalShape::ComputeInputNMM()
             if(input.sharpEdgeMap.count(std::make_pair(i2,i3))>0){
                 createSharpSlabEdgeAndFace(fci->info().tag,std::make_pair(i2,i3),shapePointIndexMap,shapeEdgeIndexMap,shapeFaceIndexMap);
             }
-
-
             std::tuple<int,int,int> face012=std::make_tuple(i0,i1,i2);
             if(input.sharpFaceMap.count(face012)>0){
                 createSharpSlabTetrahedron(fci->info().tag,face012,shapePointIndexMap,shapeEdgeIndexMap,shapeFaceIndexMap);
@@ -306,6 +409,85 @@ void ThreeDimensionalShape::ComputeInputNMM()
             std::tuple<int,int,int> face123=std::make_tuple(i1,i2,i3);
             if(input.sharpFaceMap.count(face123)>0){
                 createSharpSlabTetrahedron(fci->info().tag,face123,shapePointIndexMap,shapeEdgeIndexMap,shapeFaceIndexMap);
+            }
+        }
+        for(Finite_vertices_iterator_t fvi = pt->finite_vertices_begin(); fvi != pt->finite_vertices_end(); fvi ++){
+
+            if(input.sharpPointMap.count(fvi->info().id)>0||input.sharpCornerMap.count(fvi->info().id)>0){
+                // 定义一个容器来存储关联的单元
+                std::vector<Triangulation::Cell_handle> incident_cells;
+
+                // 获取与顶点关联的单元
+                pt->finite_incident_cells(fvi, std::back_inserter(incident_cells));
+                std::vector<Triangulation::Cell_handle> filter;
+                for(Triangulation::Cell_handle cell_handle:incident_cells)
+                {
+                    if(cell_handle->info().inside){
+                        int tag=cell_handle->info().tag;//注意这里是tag不是id
+                        int mid=shapePointIndexMap[fvi->info().id];//注意这里是锐点网格顶点对应中轴点id
+                        std::pair<int,int> edge(tag,mid);
+                        if(shapeEdgeIndexMap.count(edge)>0){
+                            filter.push_back(cell_handle);
+                        }
+                    }
+                }
+                if(filter.size()>=2)
+                {
+                    int mid=shapePointIndexMap[fvi->info().id];
+                    for(int i=0;i<filter.size()-1;i++){
+                        for(int j=i+1;j<filter.size();j++){
+                            //std::cout<<"found two tetrahedron incidient to sharp point!"<<std::endl;
+                            int tag0=filter[i]->info().tag;
+                            int tag1=filter[j]->info().tag;
+                            std::pair<int,int> edge0v(tag0,mid);//注意这里是锐点网格顶点对应中轴点id
+                            std::pair<int,int> edge1v(tag1,mid);//注意这里是锐点网格顶点对应中轴点id
+                            if(shapeEdgeIndexMap.count(edge0v)>0&&shapeEdgeIndexMap.count(edge1v)>0)
+                            {
+                                unsigned int tag0v = shapeEdgeIndexMap[edge0v];
+                                unsigned int tag1v = shapeEdgeIndexMap[edge1v];
+                                assert(input_nmm.edges[tag0v].second->vertices_.first == tag0 && input_nmm.edges[tag0v].second->vertices_.second == mid);
+                                assert(input_nmm.edges[tag1v].second->vertices_.first == tag1 && input_nmm.edges[tag1v].second->vertices_.second == mid);
+                                unsigned int eid;
+                                if (!input_nmm.Edge(tag0, tag1, eid)&&!input_nmm.Edge(tag1, tag0, eid)) {
+                                    //如果这条边不存在
+
+                                    Bool_EdgePointer bep;
+                                    bep.first = true;
+                                    bep.second = new NonManifoldMesh_Edge;
+                                    (*bep.second).vertices_.first = tag0;
+                                    (*bep.second).vertices_.second = tag1;
+                                    (*input_nmm.vertices[tag0].second).edges_.insert(input_nmm.edges.size());//每个中轴点都存储关联的中轴边的序号
+                                    (*input_nmm.vertices[tag1].second).edges_.insert(input_nmm.edges.size());//每个中轴点都存储关联的中轴边的序号
+                                    eid=input_nmm.edges.size();
+                                    input_nmm.edges.push_back(bep);
+                                    input_nmm.numEdges ++;
+                                }
+                                assert((input_nmm.edges[eid].second->vertices_.first == tag0 && input_nmm.edges[eid].second->vertices_.second == tag1)||
+                                    (input_nmm.edges[eid].second->vertices_.first == tag1 && input_nmm.edges[eid].second->vertices_.second == tag0));
+                                
+                                //三条边构成面
+                                Bool_FacePointer bfp;//中轴三角面
+                                bfp.first = true;
+                                bfp.second = new NonManifoldMesh_Face;
+
+                                (*bfp.second).vertices_.insert(tag0);
+                                (*bfp.second).vertices_.insert(tag1);
+                                (*bfp.second).vertices_.insert(mid);//中轴三角面的中轴点序号
+                                (*bfp.second).edges_.insert(tag0v);
+                                (*bfp.second).edges_.insert(tag1v);
+                                (*bfp.second).edges_.insert(eid);
+
+                                input_nmm.vertices[tag0].second->faces_.insert(input_nmm.faces.size());
+                                input_nmm.vertices[tag1].second->faces_.insert(input_nmm.faces.size());
+                                input_nmm.vertices[mid].second->faces_.insert(input_nmm.faces.size());//中轴点关联的中轴三角面序号
+                                input_nmm.edges[tag0v].second->faces_.insert(input_nmm.faces.size());
+                                input_nmm.edges[tag1v].second->faces_.insert(input_nmm.faces.size());
+                                input_nmm.edges[eid].second->faces_.insert(input_nmm.faces.size());//中轴边关联的中轴三角面序号
+                                input_nmm.faces.push_back(bfp);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -368,11 +550,11 @@ void ThreeDimensionalShape::ComputeInputNMM()
     //    }
     //}
 
-//    for(int i=0;i<input_nmm.edges.size();i++){
-//        if(toDeleteEdges.count(i)>0){
-//            input_nmm.DeleteEdge(i);
-//        }
-//    }
+    //    for(int i=0;i<input_nmm.edges.size();i++){
+    //        if(toDeleteEdges.count(i)>0){
+    //            input_nmm.DeleteEdge(i);
+    //        }
+    //    }
 
 
     input_nmm.Export(input_nmm.meshname);
@@ -381,6 +563,7 @@ void ThreeDimensionalShape::ComputeInputNMM()
     input_nmm.numEdges = 0;
     input_nmm.numFaces = 0;
 }
+
 void ThreeDimensionalShape::LoadInputNMM(std::string fname){
     std::ifstream mastream(fname.c_str());
     //    NonManifoldMesh newinputnmm;
@@ -409,7 +592,9 @@ void ThreeDimensionalShape::LoadInputNMM(std::string fname){
     //                                             input.pVertexList[i]->point()[1],
     //                input.pVertexList[i]->point()[2]
     //                ));
-
+    slab_mesh.vertices.clear();
+    slab_mesh.edges.clear();
+    slab_mesh.faces.clear();
     for(unsigned i = 0; i < nv; i ++)
     {
         char ch;
@@ -526,8 +711,9 @@ void ThreeDimensionalShape::LoadInputNMM(std::string fname){
     /*slab_mesh.iniNumVertices = slab_mesh.numVertices;
     slab_mesh.iniNumEdges = slab_mesh.numEdges;
     slab_mesh.iniNumFaces = slab_mesh.numFaces;*/
-    slab_mesh.constructTree(input.surface_mesh);
-    slab_mesh.deleteWrongEdges();
+    slab_mesh.constructTree(surface_mesh);
+    slab_mesh.constructMeshFacetsBVH(surface_mesh);
+    //slab_mesh.deleteWrongEdges();
     slab_mesh.update();
 }
 
@@ -548,7 +734,9 @@ void ThreeDimensionalShape::InitialSlabMesh()
     {
         if(!slab_mesh.vertices[i].first)
             continue;
-
+        if(slab_mesh.vertices[i].second->sphere.radius<=1e-5){
+            slab_mesh.vertices[i].second->isFeature=true;
+        }
         SlabVertex sv = *slab_mesh.vertices[i].second;
         std::set<unsigned> fset = sv.faces_;
         Vector4d C1(sv.sphere.center.X(), sv.sphere.center.Y(), sv.sphere.center.Z(), sv.sphere.radius);
@@ -591,7 +779,21 @@ void ThreeDimensionalShape::InitialSlabMesh()
             slab_mesh.vertices[i].second->related_face += 2;
         }
     }
-
+    for(unsigned i=0;i<slab_mesh.edges.size();i++)
+    {
+        if(!slab_mesh.edges[i].first)
+            continue;
+        int i0=slab_mesh.edges[i].second->vertices_.first;
+        int i1=slab_mesh.edges[i].second->vertices_.second;
+        if(slab_mesh.vertices[i0].second->isFeature&&!slab_mesh.vertices[i1].second->isFeature)
+        {
+            slab_mesh.vertices[i1].second->saved_vertex=true;
+        }
+        if(!slab_mesh.vertices[i0].second->isFeature&&slab_mesh.vertices[i1].second->isFeature)
+        {
+            slab_mesh.vertices[i0].second->saved_vertex=true;
+        }
+    }
     switch(slab_mesh.preserve_boundary_method)//default 0
     {
     case 1 :
@@ -856,17 +1058,25 @@ int ThreeDimensionalShape::checkPointInTriangle(Point p,Point a,Point b,Point c)
         return -1;
     }
 }
-
+/**
+ * @brief ThreeDimensionalShape::createSharpSlabEdgeAndFace
+ * @param tag 四面体的中轴点tag
+ * @param edge 锐边按顶点id排序的pair
+ * @param shapePointIndexMap <锐边顶点对应的中轴点id有序的pair,中轴边id>
+ * @param shapeEdgeIndexMap
+ * @param shapeFaceIndexMap
+ */
 void ThreeDimensionalShape::createSharpSlabEdgeAndFace(int tag, std::pair<int, int> edge, std::map<int, int> &shapePointIndexMap, std::map<std::pair<int, int>, int> &shapeEdgeIndexMap, std::map<std::tuple<int, int, int>, int> &shapeFaceIndexMap)
 {
     int i0=edge.first;
     int i1=edge.second;
-    std::vector<int> tmp = { shapePointIndexMap[i0],shapePointIndexMap[i1]};
+    std::vector<int> tmp = { shapePointIndexMap[i0],shapePointIndexMap[i1]};//顶点id转换成中轴点id
     std::sort(tmp.begin(), tmp.end());
     i0=tmp[0];
     i1=tmp[1];
     std::pair<int,int> edge01=std::make_pair(i0,i1);
-    if(shapeEdgeIndexMap.count(edge01)==0){
+    if(shapeEdgeIndexMap.count(edge01)==0){//对两个锐边顶点创建中轴边
+
         Bool_EdgePointer bep;
         bep.first = true;
         bep.second = new NonManifoldMesh_Edge;
@@ -879,7 +1089,7 @@ void ThreeDimensionalShape::createSharpSlabEdgeAndFace(int tag, std::pair<int, i
         input_nmm.numEdges ++;
     }
     std::pair<int,int> edget0=std::make_pair(tag,i0);
-    if(shapeEdgeIndexMap.count(edget0)==0){
+    if(shapeEdgeIndexMap.count(edget0)==0){//四面体中心到i0
         Bool_EdgePointer bep;
         bep.first = true;
         bep.second = new NonManifoldMesh_Edge;
@@ -892,7 +1102,7 @@ void ThreeDimensionalShape::createSharpSlabEdgeAndFace(int tag, std::pair<int, i
         input_nmm.numEdges ++;
     }
     std::pair<int,int> edget1=std::make_pair(tag,i1);
-    if(shapeEdgeIndexMap.count(edget1)==0){
+    if(shapeEdgeIndexMap.count(edget1)==0){//四面体中心到i1
         Bool_EdgePointer bep;
         bep.first = true;
         bep.second = new NonManifoldMesh_Edge;
@@ -942,13 +1152,20 @@ void ThreeDimensionalShape::createSharpSlabEdgeAndFace(int tag, std::pair<int, i
     }
 
 }
-
+/**
+ * @brief ThreeDimensionalShape::createSharpSlabTetrahedron
+ * @param tag  四面体中轴id
+ * @param face 按id大小顺序排序的网格顶点tuple
+ * @param shapePointIndexMap <锐边网格顶点id,中轴id>
+ * @param shapeEdgeIndexMap <锐边顶点对应的中轴点id有序的pair,中轴边id>
+ * @param shapeFaceIndexMap <锐面网格顶点对应的中轴点id有序的tuple,中轴面id>
+ */
 void ThreeDimensionalShape::createSharpSlabTetrahedron(int tag,std::tuple<int, int, int> face, std::map<int, int> &shapePointIndexMap, std::map<std::pair<int, int>, int> &shapeEdgeIndexMap, std::map<std::tuple<int, int, int>, int> &shapeFaceIndexMap)
 {
     int i0 = std::get<0>(face);
     int i1 = std::get<1>(face);
     int i2 = std::get<2>(face);
-    std::vector<int> tmp = { shapePointIndexMap[i0],shapePointIndexMap[i1],shapePointIndexMap[i2] };
+    std::vector<int> tmp = { shapePointIndexMap[i0],shapePointIndexMap[i1],shapePointIndexMap[i2] };//网格顶点id转换成中轴点id
     std::sort(tmp.begin(), tmp.end());
     i0 = tmp[0];
     i1 = tmp[1];
@@ -976,7 +1193,13 @@ void ThreeDimensionalShape::createSharpSlabTetrahedron(int tag,std::tuple<int, i
 }
 
 
-
+/**
+ * @brief ThreeDimensionalShape::createSlabFace
+ * @param face                  三个锐面顶点对应的中轴点id有序排序的tuple
+ * @param shapePointIndexMap    <锐边网格顶点id,中轴id>
+ * @param shapeEdgeIndexMap     <锐边顶点对应的中轴点id有序的pair,中轴边id>
+ * @param shapeFaceIndexMap     <锐面网格顶点对应的中轴点id有序的tuple,中轴面id>
+ */
 void ThreeDimensionalShape::createSlabFace(std::tuple<int, int, int> face, std::map<int, int> &shapePointIndexMap, std::map<std::pair<int, int>, int> &shapeEdgeIndexMap, std::map<std::tuple<int, int, int>, int> &shapeFaceIndexMap)
 {
     int i0=std::get<0>(face);
@@ -1056,6 +1279,7 @@ void ThreeDimensionalShape::createSlabFace(std::tuple<int, int, int> face, std::
         input_nmm.edges[eid[0]].second->faces_.insert(input_nmm.faces.size());
         input_nmm.edges[eid[1]].second->faces_.insert(input_nmm.faces.size());
         input_nmm.edges[eid[2]].second->faces_.insert(input_nmm.faces.size());//中轴边关联的中轴三角面序号
+        shapeFaceIndexMap[slabFace]=input_nmm.faces.size();
         input_nmm.faces.push_back(bfp);
         input_nmm.numFaces ++;
     }

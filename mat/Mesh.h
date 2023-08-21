@@ -68,9 +68,11 @@ class CellInfo
 {
 public:
     bool inside;//在网格内部
-    int id;
-    int tag;
+    int id;//四面体的序号
+    int tag;//中轴点的序号
     bool is_boundary;//可能在网格外面
+    bool is_sharp_corner=false;//尖角
+    bool has_sharp_edge=false;//尖角
     bool is_pole;//四面体是否有效，暂时不用
     std::set<unsigned int> pole_bplist;//有效地四面体关联的有限点
     double dist_center_to_boundary; // approximate
@@ -307,8 +309,9 @@ class MPMesh : public CGAL::Polyhedron_3<simple_kernel, MPItems>
 {
 public:
     Tree* tree;
-    Surface_mesh surface_mesh;
+    std::size_t nb_sharp_corners;
     std::size_t nb_sharp_edges;
+    std::map<int,bool> sharpCornerMap;
     std::map<int,bool> sharpPointMap;
     std::map<std::pair<int,int>,bool> sharpEdgeMap;
     std::map<std::tuple<int,int,int>,bool> sharpFaceMap;
@@ -490,8 +493,13 @@ public:
     int number_of_bad_vertices;
     int number_of_real_bad_vertices;
     // discrete convex-concave
-
-
+public:
+    std::vector<bool> checked;
+    std::vector<bool> deleted;
+private:
+    double maxEdgeLength;
+    double minEdgeLength;
+    double medianEdgeLength;
 public:
 
     Mesh_domain * domain=nullptr;
@@ -509,8 +517,9 @@ public:
     double mean_distance_to_mesh;
     double mean_distance_to_ma;
     double mean_hausdorff_distance;
-
-    void detectShardEdge();
+    void setVertexId();
+    void detectSharpCorner();
+    void detectSharpEdge();
     void computesimpledt();
     void computedt();
     void markpoles();

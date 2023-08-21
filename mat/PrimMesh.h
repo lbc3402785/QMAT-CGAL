@@ -17,7 +17,7 @@ public:
 	std::set<unsigned> faces_; //triangle list
 	bool HasEdge(unsigned eid){return (edges_.find(eid) != edges_.end());}
 	bool HasFace(unsigned fid){return (faces_.find(fid) != faces_.end());}
-	PrimVertex() : fake_boundary_vertex(false), boundary_vertex(false), saved_vertex(false), 
+    PrimVertex() : fake_boundary_vertex(false), boundary_vertex(false), saved_vertex(false), isFeature(false),
 		non_manifold_vertex(false), collaspe_weight(0.0), boundVec(Vector3d(0, 0, 0)), mean_square_error(0.0), related_face(0){};
 	virtual ~PrimVertex(){};
 
@@ -43,7 +43,8 @@ public:
 
 	int tag;
 	Wm4::Vector3d normal;
-	bool topo_contractable;//是否可收缩										
+    bool topo_contractable=true;//是否可收缩
+    bool isFeature=false;
 };
 
 
