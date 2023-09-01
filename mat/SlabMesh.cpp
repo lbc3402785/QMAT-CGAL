@@ -9,6 +9,7 @@
 #include "geometry/Search/Triangle.h"
 #include "geometry/Search/PairTriangle.h"
 #include <omp.h>
+#include <assert.h>
 void SlabMesh::updateSize()
 {
     numVertices=vertices.size();
@@ -34,37 +35,37 @@ void SlabMesh::deleteWrongEdges()
         Point p0(vertices[i0].second->sphere.center.X(),vertices[i0].second->sphere.center.Y(),vertices[i0].second->sphere.center.Z());
         Point p1(vertices[i1].second->sphere.center.X(),vertices[i1].second->sphere.center.Y(),vertices[i1].second->sphere.center.Z());
         CGAL::Segment_3<simple_kernel> seg(p0, p1);
-//        Point_and_primitive_id pp0=tree->closest_point_and_primitive(p0);
-//        Point_and_primitive_id pp1=tree->closest_point_and_primitive(p1);
+        //        Point_and_primitive_id pp0=tree->closest_point_and_primitive(p0);
+        //        Point_and_primitive_id pp1=tree->closest_point_and_primitive(p1);
 
-//        Primitive::Id fid0 = pp0.second;
-//        Primitive::Id fid1 = pp1.second;
-//        vertex_descriptor id00=fid0->halfedge()->vertex();
-//        vertex_descriptor id01=fid0->halfedge()->next()->vertex();
-//        vertex_descriptor id02=fid0->halfedge()->next()->next()->vertex();
-//        Point p00=id00->point();
-//        Point p01=id01->point();
-//        Point p02=id02->point();
-//        vertex_descriptor id10=fid1->halfedge()->vertex();
-//        vertex_descriptor id11=fid1->halfedge()->next()->vertex();
-//        vertex_descriptor id12=fid1->halfedge()->next()->next()->vertex();
-//        Point p10=id10->point();
-//        Point p11=id11->point();
-//        Point p12=id12->point();
-//        CGAL::Triangle_3<simple_kernel> tri0(p00, p01, p02);
-//        CGAL::Triangle_3<simple_kernel> tri1(p10, p11, p12);
+        //        Primitive::Id fid0 = pp0.second;
+        //        Primitive::Id fid1 = pp1.second;
+        //        vertex_descriptor id00=fid0->halfedge()->vertex();
+        //        vertex_descriptor id01=fid0->halfedge()->next()->vertex();
+        //        vertex_descriptor id02=fid0->halfedge()->next()->next()->vertex();
+        //        Point p00=id00->point();
+        //        Point p01=id01->point();
+        //        Point p02=id02->point();
+        //        vertex_descriptor id10=fid1->halfedge()->vertex();
+        //        vertex_descriptor id11=fid1->halfedge()->next()->vertex();
+        //        vertex_descriptor id12=fid1->halfedge()->next()->next()->vertex();
+        //        Point p10=id10->point();
+        //        Point p11=id11->point();
+        //        Point p12=id12->point();
+        //        CGAL::Triangle_3<simple_kernel> tri0(p00, p01, p02);
+        //        CGAL::Triangle_3<simple_kernel> tri1(p10, p11, p12);
 
         // 判断线段是否与三角形相交
-//        bool is_intersect0 = CGAL::do_intersect(tri0, seg);
-//        bool is_intersect1 = CGAL::do_intersect(tri1, seg);
-//        if(is_intersect0&&is_intersect1){
-//            DeleteEdge(i);
-//        }
+        //        bool is_intersect0 = CGAL::do_intersect(tri0, seg);
+        //        bool is_intersect1 = CGAL::do_intersect(tri1, seg);
+        //        if(is_intersect0&&is_intersect1){
+        //            DeleteEdge(i);
+        //        }
         // 查询线段与三角形相交
         std::vector<Tree::Primitive_id> intersections;
         tree->all_intersected_primitives(seg, std::back_inserter(intersections));
         if(intersections.size()>0){
-             DeleteEdge(i);
+            DeleteEdge(i);
         }
     }
 }
@@ -188,25 +189,61 @@ void SlabMesh::project()
 
 void SlabMesh::inverseProject()
 {
-    if(tree==nullptr)return;
+    MyCGAL::Primitives::BVHAccel<double>* tree=constructMeshFacetsBVH(this->surface_mesh);
     mat2SurfaceMap.clear();
     std::cout<<"begin inverseProject..."<<std::endl;
 #pragma omp parallel for
     for(int i=0;i<vertices.size();i++){
-        if(vertices[i].first){
-            Point p(vertices[i].second->sphere.center.X(),vertices[i].second->sphere.center.Y(),vertices[i].second->sphere.center.Z());
-            Point_and_primitive_id pp=tree->closest_point_and_primitive(p);
-            Point closest_point = pp.first;
+        if(vertices[i].first&&!vertices[i].second->isFeature){
+            MyCGAL::Primitives::Vector3<double> search(vertices[i].second->sphere.center[0],vertices[i].second->sphere.center[1],vertices[i].second->sphere.center[2]);
+            meshgen::FixedSizePriorityQueue<std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double>,MyCGAL::Primitives::CompareTuple<std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double>>>
+                    result=tree->k_nearest(search,4);
+            assert(result.size()==4);
+            std::vector<MyCGAL::Primitives::Vector3<double>> points;
+            while(!result.empty()){
+                points.push_back(std::get<1>(result.top()));
+                result.pop();
+            }
 
 #pragma omp critical
             {
-                mat2SurfaceMap[p]= closest_point;
+                mat2SurfaceMap[search]=points;
             }
         }
     }
     std::cout<<"inverseProject done!"<<std::endl;
 }
-
+torch::Tensor SlabMesh::laplacian_packed()
+{
+    torch::Tensor lap=torch::zeros({static_cast<long long>(vertices.size()),static_cast<long long>(vertices.size())}).to(torch::kCUDA);
+    for(int i=0;i<vertices.size();i++){
+        std::set<unsigned> edges=vertices[i].second->edges_;
+        for(unsigned eid:edges){
+            unsigned j;
+            if(this->edges[eid].second->vertices_.first==i){
+                j=this->edges[eid].second->vertices_.second;
+            }else{
+                j=this->edges[eid].second->vertices_.first;
+            }
+            lap[i][j]=1.0/edges.size();
+        }
+        lap[i][i]=-1.0;
+    }
+    return lap;
+}
+torch::Tensor SlabMesh::laplacian_weights()
+{
+    int count=0;
+    torch::Tensor weights=torch::zeros({static_cast<long long>(vertices.size())}).to(torch::kCUDA);;
+    for(int i=0;i<vertices.size();i++){
+        if(vertices[i].first&&!vertices[i].second->isFeature){
+            weights[i]=1.0;
+            count++;
+        }
+    }
+    weights/=count;
+    return weights;
+}
 void SlabMesh::update()
 {
     CleanIsolatedVertices();//删除孤立点
@@ -1884,12 +1921,12 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
                     Sphere mid_sphere = (vertices[v1].second->sphere + vertices[v2].second->sphere) * 0.5;
                     lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);//使用中点作为收缩解
                 }else{
-                    Point_t tmp(lamdar[0],lamdar[1],lamdar[2]);
-                    if(domain->is_in_domain_object()(tmp)<0){
-                        std::cerr<<"outside of mesh!Take the mid sphere"<<std::endl;
-                        Sphere mid_sphere = (vertices[v1].second->sphere + vertices[v2].second->sphere) * 0.5;
-                        lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);//使用中点作为收缩解
-                    }
+                    //Point_t tmp(lamdar[0],lamdar[1],lamdar[2]);
+                    //if(domain->is_in_domain_object()(tmp)<0){
+                    //    std::cerr<<"outside of mesh!Take the mid sphere"<<std::endl;
+                    //    Sphere mid_sphere = (vertices[v1].second->sphere + vertices[v2].second->sphere) * 0.5;
+                    //    lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);//使用中点作为收缩解
+                    //}
                 }
             }
             else
@@ -2361,6 +2398,48 @@ void SlabMesh::checkSkeletonAndTube()
     }
 }
 
+double SlabMesh::computeHausdorff1()
+{
+    assert(tree!=nullptr);
+    hausdorff1=0;
+    for (int i = 0; i < vertices.size(); i++)
+    {
+        Point p(vertices[i].second->sphere.center.X(),vertices[i].second->sphere.center.Y(),vertices[i].second->sphere.center.Z());
+        Point_and_primitive_id pp=tree->closest_point_and_primitive(p);
+        Point np=pp.first;
+        vertices[i].second->distance=std::abs(std::sqrt((np-p).squared_length())-vertices[i].second->sphere.radius)/diag;
+        if(vertices[i].second->distance>hausdorff1){
+            hausdorff1=vertices[i].second->distance;
+        }
+    }
+    return hausdorff1;
+
+}
+double SlabMesh::computeHausdorff2()
+{
+    hausdorff2=0;
+    if(this->bvh){
+        delete this->bvh;
+    }
+    this->bvh=constructBVH();
+    project();
+    hausdorff2=0;
+#pragma omp parallel for
+    for(vertex_descriptor vd: CGAL::vertices(surface_mesh)){
+        if(surface2MatMap.count(vd->id())>0){
+            Point nearest=surface2MatMap[vd->id()].first;
+            double signedDst=surface2MatMap[vd->id()].second;
+#pragma omp critical
+            {
+                if(std::abs(signedDst)/diag>hausdorff2){
+                    hausdorff2=std::abs(signedDst)/diag;
+                }
+            }
+        }
+    }
+    this->bvh=nullptr;
+    return hausdorff2;
+}
 void SlabMesh::Simplify(int threshold){
     updateSize();
     // 当简化到小于50个顶点时，不允许包含端点的边进行合并
@@ -3113,6 +3192,13 @@ void SlabMesh::PreservBoundaryMethodFour()
 
 void SlabMesh::clear()
 {
+    hasComputedHausdorff=false;
+    colors.clear();
+    edgeColors.clear();
+    faceColors.clear();
+    matColors.clear();
+    matEdgeColors.clear();
+    matFaceColors.clear();
     edge_collapses_queue = std::priority_queue<EdgeInfo>();//add 03.12
     boundary_edge_collapses_queue = std::priority_queue<EdgeInfo>();//add 03.12
     for (unsigned i = 0; i < vertices.size(); i++)
@@ -3488,144 +3574,129 @@ void SlabMesh::InitialTopologyProperty() {
         }
     }
 }
-std::pair<at::Tensor,torch::Tensor> DistToBoundaryLoss::forward(SlabMesh *mesh,std::map<face_descriptor,Vector> fnormals,std::map<vertex_descriptor,Vector> vnormals, at::Tensor &v0, at::Tensor &r0)
+torch::Tensor Sphere2Boundary::forward(SlabMesh *mesh,at::Tensor &v0,at::Tensor &r0)
+{
+    torch::Tensor sum=torch::zeros(1);
+    for(int i=0;i<mesh->vertices.size();i++){
+        if(mesh->vertices[i].first&&!mesh->vertices[i].second->isFeature){
+            MyCGAL::Primitives::Vector3<double> search(mesh->vertices[i].second->sphere.center[0],mesh->vertices[i].second->sphere.center[1],mesh->vertices[i].second->sphere.center[2]);
+            std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double> result=tree->nearest(search);
+            MyCGAL::Primitives::Object<double>* obj=std::get<0>(result);
+            std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double> result1=tree->nearestExclue(search,{obj});
+
+        }
+    }
+    return sum;
+}
+void DistToBoundaryLoss::searchMatToSurfaceKNearest(SlabMesh *mesh)
+{
+    matToSurfaceKNearest.clear();
+#pragma omp parallel for
+    for(int i=0;i<mesh->vertices.size();i++){
+        if(mesh->vertices[i].first&&!mesh->vertices[i].second->isFeature){
+            MyCGAL::Primitives::Vector3<double> search(mesh->vertices[i].second->sphere.center[0],mesh->vertices[i].second->sphere.center[1],mesh->vertices[i].second->sphere.center[2]);
+            meshgen::FixedSizePriorityQueue<std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double>,
+                    MyCGAL::Primitives::CompareTuple<std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double>>>
+                    result=mesh->facetsBvh->k_nearest(search,k);
+            assert(result.size()==k);
+            std::vector<MyCGAL::Primitives::Triangle<double>*> triangles;
+            while(!result.empty()){
+                MyCGAL::Primitives::Object<double>* obj=std::get<0>(result.top());
+                MyCGAL::Primitives::Triangle<double>* tri=static_cast<MyCGAL::Primitives::Triangle<double>*>(obj);
+                triangles.push_back(tri);
+                result.pop();
+
+            }
+#pragma omp critical
+            {
+                matToSurfaceKNearest[i]=triangles;
+            }
+        }
+    }
+}
+torch::Tensor DistToBoundaryLoss::forward(SlabMesh *mesh,std::map<face_descriptor,Vector> fnormals,std::map<vertex_descriptor,Vector> vnormals, at::Tensor &v0, at::Tensor &r0)
 {
     // 获取张量的设备类型
     torch::Device device = v0.device();
     //    std::map<Point,std::pair<Point,Point>> tmp;
     torch::Tensor sum=torch::zeros({1},torch::kDouble).to(device);
-    torch::Tensor normalLoss=torch::zeros({1},torch::kDouble).to(device);
-    int count=0;
-    int normalCount=0;
+
+    //    int count=0;
+
     torch::Tensor pointLoss=torch::zeros({1},torch::kDouble).to(device);
-    torch::Tensor pointNormalLoss=torch::zeros({1},torch::kDouble).to(device);
+
     int pointCount=0;
-    int pointNormalCount=0;
+
     torch::Tensor edgeLoss=torch::zeros({1},torch::kDouble).to(device);
-    torch::Tensor edgeNormalLoss=torch::zeros({1},torch::kDouble).to(device);
+
     int edgeCount=0;
-    int edgeNormalCount=0;
+
     torch::Tensor faceLoss=torch::zeros({1},torch::kDouble).to(device);
-    torch::Tensor faceNormalLoss=torch::zeros({1},torch::kDouble).to(device);
-    int faceCount=0;
-    int faceNormalCount=0;
-    #pragma omp parallel sections
+
+    float faceArea=0;
+#pragma omp parallel sections
     {
-        #pragma omp section
+        //#pragma omp section
+        //        {
+
+        //#pragma omp parallel for reduction(+:pointLoss)  reduction(+: pointCount)
+        //            for(int i=0;i<mesh->vertices.size();i++){
+        //                if(mesh->vertices[i].first&&!mesh->vertices[i].second->isFeature){
+        //                    MyCGAL::Primitives::Vector3<double> search(v0[i][0].item<double>(),v0[i][1].item<double>(),v0[i][2].item<double>());
+        //                    //if(matToSurfaceKNearest.count(i)>0){
+        //                    meshgen::FixedSizePriorityQueue<std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double>,
+        //                            MyCGAL::Primitives::CompareTuple<std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double>>>
+        //                            result=mesh->facetsBvh->k_nearest(search,k);
+        //                    assert(result.size()==k);
+        //                    //std::vector<MyCGAL::Primitives::Triangle<double>*> triangles=matToSurfaceKNearest[i];
+        ////                    for(MyCGAL::Primitives::Triangle<double>* tri:triangles)
+        ////                    {
+        ////                        MyCGAL::Primitives::Vector3<double> point;
+        ////                        double signdst;
+        ////                        tri->project(search,point,signdst);
+        ////                        torch::Tensor tmp=torch::tensor({point.x(),point.y(),point.z()},device)-v0[i];
+        ////                        pointLoss+=(tmp.norm()-r0[i]).square();
+        ////                        pointCount++;
+        ////                    }
+        //                    while(!result.empty()){
+        //                        MyCGAL::Primitives::Vector3<double> v=std::get<1>(result.top());
+        //                        result.pop();
+        //                        torch::Tensor tmp=torch::tensor({v.x(),v.y(),v.z()},device)-v0[i];
+        //                        pointLoss+=(tmp.norm()-r0[i]).square();
+        //                        pointCount++;
+        //                    }
+
+
+        //                }
+        //            }
+        //        }
+#pragma omp section
         {
-
-            #pragma omp parallel for reduction(+:pointLoss)  reduction(+: pointCount)
-            for(int i=0;i<mesh->vertices.size();i++){
-                if(mesh->vertices[i].first&&!mesh->vertices[i].second->isFeature){
-                    Point p(v0[i][0].item<double>(),v0[i][1].item<double>(),v0[i][2].item<double>());
-                    Point_and_primitive_id pp=tree->closest_point_and_primitive(p);
-                    Point closest_point = pp.first;
-                    Primitive::Id fid = pp.second;
-                    vertex_descriptor id0=fid->halfedge()->vertex();
-                    vertex_descriptor id1=fid->halfedge()->next()->vertex();
-                    vertex_descriptor id2=fid->halfedge()->next()->next()->vertex();
-                    Point p0=id0->point();
-                    Point p1=id1->point();
-                    Point p2=id2->point();
-
-                    torch::Tensor fn=torch::tensor({fnormals[fid].x(),fnormals[fid].y(),fnormals[fid].z()},device);
-                    {
-                        torch::Tensor cn=torch::tensor({closest_point.x(),closest_point.y(),closest_point.z()},device)-v0[i];
-                        pointLoss+=(cn.norm()-r0[i]).square();
-                        //cn=torch::nn::functional::normalize(cn, torch::nn::functional::NormalizeFuncOptions().p(2).dim(0));
-                        if((closest_point-p0).squared_length()==0){
-                            torch::Tensor vn=torch::tensor({vnormals[id0].x(),vnormals[id0].y(),vnormals[id0].z()},device);
-                            torch::Tensor dotProduct=vn.dot(cn);
-                            if(dotProduct.item<double>()<0){
-                                pointNormalLoss-= dotProduct;
-                                pointNormalCount++;
-                            }
-                        }else if((closest_point-p1).squared_length()==0){
-                            torch::Tensor vn=torch::tensor({vnormals[id1].x(),vnormals[id1].y(),vnormals[id1].z()},device);
-                            torch::Tensor dotProduct=vn.dot(cn);
-                            if(dotProduct.item<double>()<0){
-                                pointNormalLoss-= dotProduct;
-                                pointNormalCount++;
-                            }
-                        }else if((closest_point-p2).squared_length()==0){
-                            torch::Tensor vn=torch::tensor({vnormals[id2].x(),vnormals[id2].y(),vnormals[id2].z()},device);
-                            torch::Tensor dotProduct=vn.dot(cn);
-                            if(dotProduct.item<double>()<0){
-                                pointNormalLoss-= dotProduct;
-                                pointNormalCount++;
-                            }
-                        }else{
-                            if(fn.dot(cn).item<double>()<0){
-                                pointNormalLoss-= fn.dot(cn);
-                                pointNormalCount++;
-                            }
-                        }
-
-                        pointCount++;
-                    }
-
-                }
-            }
-        }
-        #pragma omp section
-        {
-            #pragma omp parallel for reduction(+:edgeLoss)  reduction(+: edgeCount)
+#pragma omp parallel for reduction(+:edgeLoss)  reduction(+: edgeCount)
             for(unsigned int i=0;i<mesh->edges.size();i++){
+                if(mesh->edges[i].second->faces_.size()>0)continue;
                 unsigned int i0=mesh->edges[i].second->vertices_.first;
                 unsigned int i1=mesh->edges[i].second->vertices_.second;
                 torch::Tensor c=(v0[i0]+v0[i1])*0.5;
                 torch::Tensor r=(r0[i0]+r0[i1])*0.5;
-                Point p(c[0].item<double>(),c[1].item<double>(),c[2].item<double>());
-                Point_and_primitive_id pp=tree->closest_point_and_primitive(p);
-                Point closest_point = pp.first;
-                Primitive::Id fid = pp.second;
-                vertex_descriptor id0=fid->halfedge()->vertex();
-                vertex_descriptor id1=fid->halfedge()->next()->vertex();
-                vertex_descriptor id2=fid->halfedge()->next()->next()->vertex();
-                Point p0=id0->point();
-                Point p1=id1->point();
-                Point p2=id2->point();
-                torch::Tensor fn=torch::tensor({fnormals[fid].x(),fnormals[fid].y(),fnormals[fid].z()},device);
-
-                {
-                    torch::Tensor cn=torch::tensor({closest_point.x(),closest_point.y(),closest_point.z()},device)-c;
-                    edgeLoss+=(cn.norm()-r).square();
-                    if((closest_point-p0).squared_length()==0){
-                        torch::Tensor vn=torch::tensor({vnormals[id0].x(),vnormals[id0].y(),vnormals[id0].z()},device);
-                        torch::Tensor dotProduct=vn.dot(cn);
-                        if(dotProduct.item<double>()<0){
-                            edgeNormalLoss-= dotProduct;
-                            edgeNormalCount++;
-                        }
-                    }else if((closest_point-p1).squared_length()==0){
-                        torch::Tensor vn=torch::tensor({vnormals[id1].x(),vnormals[id1].y(),vnormals[id1].z()},device);
-                        torch::Tensor dotProduct=vn.dot(cn);
-                        if(dotProduct.item<double>()<0){
-                            edgeNormalLoss-= dotProduct;
-                            pointNormalCount++;
-                        }
-                    }else if((closest_point-p2).squared_length()==0){
-                        torch::Tensor vn=torch::tensor({vnormals[id2].x(),vnormals[id2].y(),vnormals[id2].z()},device);
-                        torch::Tensor dotProduct=vn.dot(cn);
-                        if(dotProduct.item<double>()<0){
-                            edgeNormalLoss-= dotProduct;
-                            edgeNormalCount++;
-                        }
-                    }else{
-                        if(fn.dot(cn).item<double>()<0){
-                            edgeNormalLoss-= fn.dot(cn);
-                            edgeNormalCount++;
-                        }
-                    }
-
-                    edgeCount++;
+                MyCGAL::Primitives::Vector3<double> p(c[0].item<double>(),c[1].item<double>(),c[2].item<double>());
+                meshgen::FixedSizePriorityQueue<std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double>,
+                        MyCGAL::Primitives::CompareTuple<std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double>>>
+                        result=mesh->facetsBvh->k_nearest(p,k);
+                assert(result.size()==k);
+                while(!result.empty()){
+                    MyCGAL::Primitives::Vector3<double> v=std::get<1>(result.top());
+                    result.pop();
+                    torch::Tensor tmp=torch::tensor({v.x(),v.y(),v.z()},device)-c;
+                    edgeLoss+=(tmp.norm()-r).square();
                 }
+                edgeCount++;
             }
         }
-        #pragma omp section
+#pragma omp section
         {
 
-            #pragma omp parallel for reduction(+:faceLoss)  reduction(+: faceCount)
+#pragma omp parallel for reduction(+:faceLoss)  reduction(+: faceArea)
             for(unsigned int i=0;i<mesh->faces.size();i++){
                 std::vector<unsigned int> vids(mesh->faces[i].second->vertices_.begin(),mesh->faces[i].second->vertices_.end());
                 unsigned int i0=vids[0];
@@ -3633,67 +3704,43 @@ std::pair<at::Tensor,torch::Tensor> DistToBoundaryLoss::forward(SlabMesh *mesh,s
                 unsigned int i2=vids[2];
                 torch::Tensor c=(v0[i0]+v0[i1]+v0[i2])/3.0;
                 torch::Tensor r=(r0[i0]+r0[i1]+r0[i2])/3.0;
-                Point p(c[0].item<double>(),c[1].item<double>(),c[2].item<double>());
-                Point_and_primitive_id pp=tree->closest_point_and_primitive(p);
+                // 计算两个边向量
+                torch::Tensor edge1 = v0[i1] - v0[i0];
+                torch::Tensor edge2 = v0[i2] - v0[i0];
 
-                Point closest_point = pp.first;
-                Primitive::Id fid = pp.second;
+                // 计算叉乘
+                torch::Tensor crossProduct = torch::cross(edge1, edge2);
+                // 计算三角形面积的一半
+                float area = 0.5 * torch::norm(crossProduct).item<float>();
+                MyCGAL::Primitives::Vector3<double> p(c[0].item<double>(),c[1].item<double>(),c[2].item<double>());
+                meshgen::FixedSizePriorityQueue<std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double>,
+                        MyCGAL::Primitives::CompareTuple<std::tuple<MyCGAL::Primitives::Object<double>*,MyCGAL::Primitives::Vector3<double>,double>> >
+                        result=mesh->facetsBvh->k_nearest(p,k);
+                assert(result.size()==k);
+                while(!result.empty()){
 
-                vertex_descriptor id0=fid->halfedge()->vertex();
-                vertex_descriptor id1=fid->halfedge()->next()->vertex();
-                vertex_descriptor id2=fid->halfedge()->next()->next()->vertex();
-                Point p0=id0->point();
-                Point p1=id1->point();
-                Point p2=id2->point();
-                torch::Tensor fn=torch::tensor({fnormals[fid].x(),fnormals[fid].y(),fnormals[fid].z()},device);
-
-                {
-                    torch::Tensor cn=torch::tensor({closest_point.x(),closest_point.y(),closest_point.z()},device)-c;
-                    faceLoss+=(cn.norm()-r).square();
-                    if((closest_point-p0).squared_length()==0){
-                        torch::Tensor vn=torch::tensor({vnormals[id0].x(),vnormals[id0].y(),vnormals[id0].z()},device);
-                        torch::Tensor dotProduct=vn.dot(cn);
-                        if(dotProduct.item<double>()<0){
-                            faceNormalLoss-= dotProduct;
-                            faceNormalCount++;
-                        }
-                    }else if((closest_point-p1).squared_length()==0){
-                        torch::Tensor vn=torch::tensor({vnormals[id1].x(),vnormals[id1].y(),vnormals[id1].z()},device);
-                        if(vn.dot(cn).item<double>()<0){
-                            faceNormalLoss-= vn.dot(cn);
-                            faceNormalCount++;
-                        }
-                    }else if((closest_point-p2).squared_length()==0){
-                        torch::Tensor vn=torch::tensor({vnormals[id2].x(),vnormals[id2].y(),vnormals[id2].z()},device);
-                        torch::Tensor dotProduct=vn.dot(cn);
-                        if(dotProduct.item<double>()<0){
-                            faceNormalLoss-= dotProduct;
-                            faceNormalCount++;
-                        }
-                    }else{
-                        if(fn.dot(cn).item<double>()<0){
-                            faceNormalLoss-= fn.dot(cn);
-                            faceNormalCount++;
-                        }
-                    }
-
-                    faceCount++;
+                    MyCGAL::Primitives::Vector3<double> v=std::get<1>(result.top());
+                    result.pop();
+                    torch::Tensor tmp=torch::tensor({v.x(),v.y(),v.z()},device)-c;
+                    faceLoss+=(tmp.norm()-r).square()*area;
                 }
+                faceArea+=area;
             }
         }
-    }
 
-    sum = pointLoss + edgeLoss + faceLoss;
-    normalLoss=pointNormalLoss+edgeNormalLoss+faceNormalLoss;
-    count=pointCount+edgeCount+faceCount;
-    normalCount=pointNormalCount+edgeNormalCount+faceNormalCount;
-    if(count>0){
-        sum/=count;
     }
-    if(normalCount>0){
-        normalLoss/=normalCount;
+    if(pointCount>0){
+        pointLoss/=pointCount;
     }
-    return std::make_pair(sum,normalLoss);
+    if(edgeCount>0){
+        edgeLoss/=edgeCount;
+    }
+    if(faceArea>0){
+        faceLoss/=faceArea;
+    }
+    sum = edgeLoss+ faceLoss+pointLoss;
+
+    return sum;
 }
 MyCGAL::Primitives::BVHAccel<double> *PointToMatLoss::constructBVH(SlabMesh *mesh, at::Tensor vn,torch::Tensor rn)
 {

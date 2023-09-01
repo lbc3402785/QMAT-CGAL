@@ -1422,7 +1422,7 @@ void MPMesh::detectSharpEdge()
                         eb->vertex()->point(),//point to vertex
                         eb->next()->vertex()->point(),
                         eb->opposite()->next()->vertex()->point() );
-            if ( std::abs(angle)<92 ){
+            if ( std::abs(angle)<170 ){
                 ++nb_sharp_edges;
                 sharpPointMap[i0]=true;
                 sharpPointMap[i1]=true;
@@ -1738,40 +1738,41 @@ void MPMesh::computedt()
             //}
         }
         else {
-//            try {
-//                if (domain->is_in_domain_object()(scribed) > 0) {
-//                    if (sharpCornerMap.count(i0) > 0 || sharpCornerMap.count(i1) > 0
-//                            || sharpCornerMap.count(i2) > 0 || sharpCornerMap.count(i3) > 0) {
-//                        fci->info().inside = true;
-//                        deleted[fci->info().id] = false;
-//                        fci->info().is_sharp_corner = true;
-//                        std::cerr << "add sharp corner sphere!" << std::endl;
-//                    }
-//                    std::vector<int> tmp = { i0,i1,i2,i3 };
-//                    std::sort(tmp.begin(), tmp.end());
-//                    i0 = tmp[0];
-//                    i1 = tmp[1];
-//                    i2 = tmp[2];
-//                    i3 = tmp[3];
-//                    if (sharpPointMap.count(i0) || sharpPointMap.count(i1) || sharpPointMap.count(i2) || sharpPointMap.count(i3)) {
-//                        //            if(sharpEdgeMap.count(std::make_pair(i0,i1))>0||sharpEdgeMap.count(std::make_pair(i0,i2))>0
-//                        //                    ||sharpEdgeMap.count(std::make_pair(i0,i3))>0||sharpEdgeMap.count(std::make_pair(i1,i2))>0
-//                        //                    ||sharpEdgeMap.count(std::make_pair(i1,i3))>0||sharpEdgeMap.count(std::make_pair(i2,i3))>0){
-//                        fci->info().inside = true;
-//                        deleted[fci->info().id] = false;
-//                        fci->info().has_sharp_edge = true;
-//                        std::cerr << "add sharp edge sphere!" << std::endl;
-//                    }
-//                }
-//            }
-//            catch (std::exception& e) {
-//                fci->info().inside = false;
-//                deleted[fci->info().id] = true;
+            try {
+                if (domain->is_in_domain_object()(scribed) > 0) {
+                    if (sharpCornerMap.count(i0) > 0 || sharpCornerMap.count(i1) > 0
+                            || sharpCornerMap.count(i2) > 0 || sharpCornerMap.count(i3) > 0) {
+                        fci->info().inside = true;
+                        deleted[fci->info().id] = false;
+                        fci->info().is_sharp_corner = true;
+                        std::cerr << "add sharp corner sphere!" << std::endl;
+                    }
+                    std::vector<int> tmp = { i0,i1,i2,i3 };
+                    std::sort(tmp.begin(), tmp.end());
+                    i0 = tmp[0];
+                    i1 = tmp[1];
+                    i2 = tmp[2];
+                    i3 = tmp[3];
+                    if (sharpPointMap.count(i0) || sharpPointMap.count(i1) || sharpPointMap.count(i2) || sharpPointMap.count(i3)) {
+                        //            if(sharpEdgeMap.count(std::make_pair(i0,i1))>0||sharpEdgeMap.count(std::make_pair(i0,i2))>0
+                        //                    ||sharpEdgeMap.count(std::make_pair(i0,i3))>0||sharpEdgeMap.count(std::make_pair(i1,i2))>0
+                        //                    ||sharpEdgeMap.count(std::make_pair(i1,i3))>0||sharpEdgeMap.count(std::make_pair(i2,i3))>0){
+                        fci->info().inside = true;
+                        deleted[fci->info().id] = false;
+                        fci->info().has_sharp_edge = true;
+                        std::cerr << "add sharp edge sphere!" << std::endl;
+                    }
+                }
+            }
+            catch (std::exception& e) {
+                fci->info().inside = false;
+                deleted[fci->info().id] = true;
 
-//            }
+            }
 
         }
     }
+    std::cout<<"computedt done!"<<std::endl;
 }
 
 

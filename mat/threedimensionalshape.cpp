@@ -44,7 +44,7 @@ void ThreeDimensionalShape::ComputeInputNMM()
             continue;
         }
         Triangulation::Tetrahedron cell=pt->tetrahedron(fci);
-        double circumRadius=pt->TetCircumRadius(cell);
+        //double circumRadius=pt->TetCircumRadius(cell);
         Point_t circumCenter=CGAL::circumcenter(cell);
 
         int onSurfaceCount = facetCount(fci);//统计四面体有几个边界面
@@ -58,7 +58,7 @@ void ThreeDimensionalShape::ComputeInputNMM()
 
         double scribedRadius;
         Point_t scribed=pt->inscribeSphereCenter(pt->tetrahedron(fci),&scribedRadius);
-        CGAL::Bounded_side side=cell.bounded_side(circumCenter);
+        //CGAL::Bounded_side side=cell.bounded_side(circumCenter);
 
 
         fci->info().faceCount=onSurfaceCount;
@@ -712,7 +712,8 @@ void ThreeDimensionalShape::LoadInputNMM(std::string fname){
     slab_mesh.iniNumEdges = slab_mesh.numEdges;
     slab_mesh.iniNumFaces = slab_mesh.numFaces;*/
     slab_mesh.constructTree(surface_mesh);
-    slab_mesh.constructMeshFacetsBVH(surface_mesh);
+    //slab_mesh.facetsBvh=slab_mesh.constructMeshFacetsBVH(this->surface_mesh);
+
     //slab_mesh.deleteWrongEdges();
     slab_mesh.update();
 }

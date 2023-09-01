@@ -18,12 +18,12 @@ public:
 	bool HasEdge(unsigned eid){return (edges_.find(eid) != edges_.end());}
 	bool HasFace(unsigned fid){return (faces_.find(fid) != faces_.end());}
     PrimVertex() : fake_boundary_vertex(false), boundary_vertex(false), saved_vertex(false), isFeature(false),
-		non_manifold_vertex(false), collaspe_weight(0.0), boundVec(Vector3d(0, 0, 0)), mean_square_error(0.0), related_face(0){};
+        non_manifold_vertex(false), collaspe_weight(0.0), boundVec(Vector3d(0, 0, 0)), mean_square_error(0.0), related_face(0),distance(0){};
 	virtual ~PrimVertex(){};
 
 public:
 	// record the information of related square error 
-	double mean_square_error;
+    double mean_square_error;//边收缩产生的点的平均cost(边的cost/关联的面数)
 	unsigned related_face;
 
 public:
@@ -45,6 +45,7 @@ public:
 	Wm4::Vector3d normal;
     bool topo_contractable=true;//是否可收缩
     bool isFeature=false;
+    double distance;
 };
 
 

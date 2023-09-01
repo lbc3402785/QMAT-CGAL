@@ -8,6 +8,7 @@
 #include "PrimMesh.h"
 #include "geometry/Search/Triangle.h"
 #include "geometry/Search/BVH.h"
+#include <QVector3D>
 class SlabPrim
 {
 public:
@@ -20,7 +21,7 @@ public:
     double add_c;//边界保护项或者中轴锥项
 
     // hyperbolic weight
-    double hyperbolic_weight;
+    double hyperbolic_weight;//边的稳定性系数
 
     SlabPrim() : slab_c(0.0), add_c(0.0), hyperbolic_weight(0.0){}
 };
@@ -59,18 +60,19 @@ class SlabMesh : public PrimMesh
 public:
     Tree* tree;
     //MyCGAL::Primitives::BVHAccel<double>* tree;
-    MyCGAL::Primitives::BVHAccel<double>* bvh;
+    MyCGAL::Primitives::BVHAccel<double>* bvh=nullptr;
+    MyCGAL::Primitives::BVHAccel<double>* facetsBvh=nullptr;
     Surface_mesh surface_mesh;
     double diag;
     std::map<unsigned,std::pair<Point,double>> surface2MatMap;
-    std::map<Point,Point> mat2SurfaceMap;
-    //std::map<MyCGAL::Primitives::Vector3d,std::pair<MyCGAL::Primitives::Vector3d,MyCGAL::Primitives::Vector3d>> mat2SurfaceMap;
+    //std::map<Point,Point> mat2SurfaceMap;
+    std::map<MyCGAL::Primitives::Vector3d,std::vector<MyCGAL::Primitives::Vector3d>> mat2SurfaceMap;
     std::map<face_descriptor,Vector> fnormals;
     std::map<vertex_descriptor,Vector> vnormals;
 public:
      std::map<unsigned,std::pair<Point,double>> optimSurface2MatMap;
 public:
-    SlabMesh():tree(nullptr),bvh(nullptr){
+    SlabMesh():tree(nullptr),bvh(nullptr),facetsBvh(nullptr),compute_hausdorff(false),hasComputedHausdorff(false){
 
     }
     ~SlabMesh(){
@@ -139,10 +141,22 @@ public:
 public:
     void project();
     void inverseProject();
+    torch::Tensor laplacian_packed();
+    torch::Tensor laplacian_weights();
 public:
     std::vector<Bool_SlabVertexPointer> vertices;
     std::vector<Bool_SlabEdgePointer> edges;
     std::vector<Bool_SlabFacePointer> faces;
+    std::vector<QVector3D> matColors;
+    std::vector<QVector3D> matEdgeColors;
+    std::vector<QVector3D> matFaceColors;
+
+    std::vector<QVector3D> colors;
+    std::vector<QVector3D> edgeColors;
+    std::vector<QVector3D> faceColors;
+
+    double hausdorff1;
+    double hausdorff2;
 public:
     void update();
     void updateSize();
@@ -171,7 +185,9 @@ public:
 
     bool preserve_saved_vertices;
 
-    bool compute_hausdorff;
+    bool compute_hausdorff=false;
+
+    bool hasComputedHausdorff=false;
 
     bool prevent_inversion;
 
@@ -238,7 +254,8 @@ public:
     void EvaluateEdgeHausdorffCost(unsigned eid);
     void ReEvaluateEdgeHausdorffCost(unsigned eid);
     void checkSkeletonAndTube();
-
+    double computeHausdorff1();
+    double computeHausdorff2();
 public:
     void DistinguishVertexType();
     unsigned GetSavedPointNumber();
@@ -279,16 +296,31 @@ public:
     torch::Tensor projectOnSphere(torch::Tensor&c,torch::Tensor&r,torch::Tensor&tp);
     MyCGAL::Primitives::BVHAccel<double>* constructBVH(SlabMesh*mesh,at::Tensor vn,torch::Tensor rn);
 };
+class Sphere2Boundary
+{
+public:
+    Sphere2Boundary(MyCGAL::Primitives::BVHAccel<double>* tree):tree(tree)
+    {
+
+    }
+    torch::Tensor forward(SlabMesh *mesh,at::Tensor &v0,at::Tensor &r0);
+private:
+    MyCGAL::Primitives::BVHAccel<double>* tree;
+};
+
 class DistToBoundaryLoss
 {
 public:
     DistToBoundaryLoss(Tree* tree/*MyCGAL::Primitives::BVHAccel<double>* tree*/):tree(tree){
-
+        k=5;
     }
-    std::pair<torch::Tensor,torch::Tensor> forward(SlabMesh *mesh,std::map<face_descriptor,Vector> fnormals,std::map<vertex_descriptor,Vector> vnormals,at::Tensor &v0,at::Tensor &r0);
+    void searchMatToSurfaceKNearest(SlabMesh *mesh);
+    torch::Tensor forward(SlabMesh *mesh,std::map<face_descriptor,Vector> fnormals,std::map<vertex_descriptor,Vector> vnormals,at::Tensor &v0,at::Tensor &r0);
 private:
     Tree* tree;
+    int k=3;
     //MyCGAL::Primitives::BVHAccel<double>* tree;
+    std::map<int,std::vector<MyCGAL::Primitives::Triangle<double>*>> matToSurfaceKNearest;
 };
 
 #endif
