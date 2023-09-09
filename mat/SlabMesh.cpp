@@ -32,6 +32,8 @@ void SlabMesh::deleteWrongEdges()
     for(int i=0;i<edges.size();i++){
         int64_t i0=edges[i].second->vertices_.first;
         int64_t i1=edges[i].second->vertices_.second;
+        if(vertices[i0].second->isFeature||vertices[i1].second->isFeature)continue;
+//        if(!edges[i].second->topo_contractable)continue;
         Point p0(vertices[i0].second->sphere.center.X(),vertices[i0].second->sphere.center.Y(),vertices[i0].second->sphere.center.Z());
         Point p1(vertices[i1].second->sphere.center.X(),vertices[i1].second->sphere.center.Y(),vertices[i1].second->sphere.center.Z());
         CGAL::Segment_3<simple_kernel> seg(p0, p1);
@@ -385,7 +387,58 @@ void SlabMesh::AdjustStorage()
     edges = new_edges;
     faces = new_faces;
 }
+void SlabMesh::ScaleTransform(double scale)
+{
+    for(int k=0;k<vertices.size();k++)
+    {
+        vertices[k].second->sphere.radius*=1.0/diag;
+        vertices[k].second->sphere.center*=1.0/diag;
+    }
+    for(int k=0;k<vertices.size();k++)
+    {
+        vertices[k].second->sphere.radius*=scale;
+    }
+    for(int k=0;k<edges.size();k++){
+        unsigned i0=edges[k].second->vertices_.first;
+        unsigned i1=edges[k].second->vertices_.second;
+        double r0=vertices[i0].second->sphere.radius;
+        double r1=vertices[i1].second->sphere.radius;
 
+        Vector3d c0=vertices[i0].second->sphere.center;
+        Vector3d c1=vertices[i1].second->sphere.center;
+        double dis=(c1-c0).Length();
+        if(r0<r1){
+            if(r1>=(dis+r0)){
+                vertices[i0].first=false;
+                for(unsigned eid:vertices[i0].second->edges_){
+                    edges[eid].first=false;
+                }
+                for(unsigned fid:vertices[i0].second->faces_){
+                    faces[fid].first=false;
+                }
+            }
+        }else{
+            if(r0>=(dis+r1)){
+                vertices[i1].first=false;
+                for(unsigned eid:vertices[i1].second->edges_){
+                    edges[eid].first=false;
+                }
+                for(unsigned fid:vertices[i1].second->faces_){
+                    faces[fid].first=false;
+                }
+            }
+        }
+    }
+    for(int k=0;k<vertices.size();k++)
+    {
+        vertices[k].second->sphere.radius*=1.0/scale;
+    }
+    for(int k=0;k<vertices.size();k++)
+    {
+        vertices[k].second->sphere.radius*=diag;
+        vertices[k].second->sphere.center*=diag;
+    }
+}
 bool SlabMesh::ValidVertex(unsigned vid){
     if(vid > vertices.size())
         return false;

@@ -203,7 +203,7 @@ public:
     Mesh_domain * domain=nullptr;
 public:
     void AdjustStorage();
-
+    void ScaleTransform(double scale);
 public:
     bool ValidVertex(unsigned vid);
     bool Edge(unsigned vid0, unsigned vid1, unsigned & eid);

@@ -1422,7 +1422,7 @@ void MPMesh::detectSharpEdge()
                         eb->vertex()->point(),//point to vertex
                         eb->next()->vertex()->point(),
                         eb->opposite()->next()->vertex()->point() );
-            if ( std::abs(angle)<170 ){
+            if ( std::abs(angle)<135 ){
                 ++nb_sharp_edges;
                 sharpPointMap[i0]=true;
                 sharpPointMap[i1]=true;
@@ -1706,36 +1706,36 @@ void MPMesh::computedt()
             continue;
         }
         if(fci->info().inside){
-            //try {
-            //    Triangulation::Tetrahedron cell = dt.tetrahedron(fci);
-            //    Point_t circumCenter = CGAL::circumcenter(cell);
-            //    bool allOutSide = true;
-            //    for (unsigned k = 0; k < 4; k++) {
-            //        Point_t p = fci->vertex(k)->point();
-            //        int id = fci->vertex(k)->info().id;
-            //        Vertex_handle v = vertices_begin();
-            //        std::advance(v, id);
-            //        Vector_3 n = v->normal;//顶点的法向
-            //        Vector_3 cp(p.x() - circumCenter.x(), p.y() - circumCenter.y(), p.z() - circumCenter.z());//球心指向顶点
-            //        Vector_3 cp(p.x()-scribed.x(),p.y()-scribed.y(),p.z()-scribed.z());//球心指向顶点
-            //        double dot = n * cp;
-            //        if (dot < 0) fci->info().is_boundary = true;
-            //        if (dot > 0) {
-            //            allOutSide = false;
-            //        }
-            //    }
-            //    if (allOutSide) {
-            //        所有球心指向顶点的方向都与顶点法向相反
-            //        std::cerr << "found outside sphere!" << std::endl;
-            //        fci->info().inside = false;
-            //        deleted[fci->info().id] = true;
-            //    }
-            //}
-            //catch (std::exception& e) {
-            //    fci->info().inside = false;
-            //    deleted[fci->info().id] = !(fci->info().inside);
-            //    continue;
-            //}
+            try {
+                Triangulation::Tetrahedron cell = dt.tetrahedron(fci);
+                Point_t circumCenter = CGAL::circumcenter(cell);
+                bool allOutSide = true;
+                for (unsigned k = 0; k < 4; k++) {
+                    Point_t p = fci->vertex(k)->point();
+                    int id = fci->vertex(k)->info().id;
+                    Vertex_handle v = vertices_begin();
+                    std::advance(v, id);
+                    Vector_3 n = v->normal;//顶点的法向
+                    Vector_3 cp(p.x() - circumCenter.x(), p.y() - circumCenter.y(), p.z() - circumCenter.z());//球心指向顶点
+                    //Vector_3 cp(p.x()-scribed.x(),p.y()-scribed.y(),p.z()-scribed.z());//球心指向顶点
+                    double dot = n * cp;
+                    if (dot < 0) fci->info().is_boundary = true;
+                    if (dot > 0) {
+                        allOutSide = false;
+                    }
+                }
+                if (allOutSide) {
+                    //所有球心指向顶点的方向都与顶点法向相反
+                    std::cerr << "found outside sphere!" << std::endl;
+                    fci->info().inside = false;
+                    deleted[fci->info().id] = true;
+                }
+            }
+            catch (std::exception& e) {
+                fci->info().inside = false;
+                deleted[fci->info().id] = !(fci->info().inside);
+                continue;
+            }
         }
         else {
             try {
