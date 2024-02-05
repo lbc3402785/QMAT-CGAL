@@ -26,6 +26,37 @@ void SlabMesh::compute()
     //ComputeFacesNormal();//计算每个面的法向
     //ComputeVerticesNormal();//计算每个点的法向，关联面的法向平均值
 }
+
+Eigen::MatrixXd SlabMesh::extractPoints()
+{
+    Eigen::MatrixXd Q=Eigen::MatrixXd::Zero(vertices.size(),3);
+    for(int i=0;i<vertices.size();i++){
+        Vector3d center=vertices[i].second->sphere.center;
+        Q(i,0)=center[0];
+        Q(i,1)=center[1];
+        Q(i,2)=center[2];
+    }
+    return Q;
+}
+
+void SlabMesh::deleteOutside()
+{
+    std::cout<<"begin deleteOutside..."<<std::endl;
+    Eigen::MatrixXd Q=extractPoints();
+    Eigen::VectorXd W;
+    igl::winding_number(V,F,Q,W);
+    for(int i=0;i<vertices.size();i++){
+        //if(vertices[i].second->isFeature)continue;
+        Vector3d center=vertices[i].second->sphere.center;
+        Point_t tmp(center[0],center[1],center[2]);
+        if(domain->is_in_domain_object()(tmp)<=0||W(i)<=0.5){
+            std::cerr<<"delete outside!"<<std::endl;
+            DeleteVertex(i);
+        }
+    }
+    std::cout<<"deleteOutside done!"<<std::endl;
+}
+
 void SlabMesh::deleteWrongEdges()
 {
 
@@ -1974,12 +2005,12 @@ void SlabMesh::EvaluateEdgeCollapseCost(unsigned eid){
                     Sphere mid_sphere = (vertices[v1].second->sphere + vertices[v2].second->sphere) * 0.5;
                     lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);//使用中点作为收缩解
                 }else{
-                    //Point_t tmp(lamdar[0],lamdar[1],lamdar[2]);
-                    //if(domain->is_in_domain_object()(tmp)<0){
-                    //    std::cerr<<"outside of mesh!Take the mid sphere"<<std::endl;
-                    //    Sphere mid_sphere = (vertices[v1].second->sphere + vertices[v2].second->sphere) * 0.5;
-                    //    lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);//使用中点作为收缩解
-                    //}
+                    Point_t tmp(lamdar[0],lamdar[1],lamdar[2]);
+                    if(domain->is_in_domain_object()(tmp)<0){
+                        std::cerr<<"outside of mesh!Take the mid sphere"<<std::endl;
+                        Sphere mid_sphere = (vertices[v1].second->sphere + vertices[v2].second->sphere) * 0.5;
+                        lamdar = Vector4d(mid_sphere.center.X(), mid_sphere.center.Y(), mid_sphere.center.Z(), mid_sphere.radius);//使用中点作为收缩解
+                    }
                 }
             }
             else

@@ -1459,7 +1459,7 @@ void MPMesh::detectSharpEdge()
 
 void MPMesh::computedt()
 {
-    bool addIndicator=true;
+    bool addIndicator=false;
     // compute dt
     dt.clear();
     // 遍历所有边并计算边长

@@ -9,6 +9,8 @@
 #include "geometry/Search/Triangle.h"
 #include "geometry/Search/BVH.h"
 #include <QVector3D>
+#include <igl/winding_number.h>
+#include <Eigen/Core>
 class SlabPrim
 {
 public:
@@ -118,6 +120,8 @@ public:
 //        }
 //        tree=new MyCGAL::Primitives::BVHAccel<double>(objects);
     }
+    Eigen::MatrixXd extractPoints();
+    void deleteOutside();
     void deleteWrongEdges();
     MyCGAL::Primitives::BVHAccel<double>* constructBVH();
     MyCGAL::Primitives::BVHAccel<double>* constructMeshFacetsBVH(Surface_mesh &surface_mesh)
@@ -201,6 +205,8 @@ public:
 
     double bound_weight;//边界边权值取0.1
     Mesh_domain * domain=nullptr;
+    Eigen::MatrixXd V;
+    Eigen::MatrixXi F;
 public:
     void AdjustStorage();
     void ScaleTransform(double scale);
